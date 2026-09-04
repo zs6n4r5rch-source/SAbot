@@ -9,6 +9,7 @@ from app.db.session import SessionLocal
 from app.bot.inventory import product_settings_text
 from app.models import OwnerReportSettings, TelegramUser, UserRole
 from app.services.audit import write_audit
+from app.services.auth import get_access
 
 router = Router()
 
@@ -110,7 +111,7 @@ async def set_timezone(message: Message, state: FSMContext):
 
 @router.message(F.text == "🍔 Настройки бара и снеков")
 async def bar_settings(message: Message):
-    user = await access(message)
+    user = await get_access(message)
     if user is None or user.role != UserRole.OWNER.value:
         await message.answer("⛔ Доступ только для владельца.")
         return
