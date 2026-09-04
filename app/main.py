@@ -25,6 +25,7 @@ from app.models.smm import SMMAccess, SMMTask, SMMTaskRate
 from app.webapp.app import app as web_app
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
+from app.webapp.social_api import router as social_api_router
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
@@ -62,6 +63,7 @@ async def main():
     dp.include_router(restart_router)
     web_app.include_router(statistics_router)
     web_app.include_router(smm_api_router)
+    web_app.include_router(social_api_router)
     web_app.include_router(telegram_webhook_router)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
