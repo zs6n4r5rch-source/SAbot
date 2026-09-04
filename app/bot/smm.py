@@ -4,13 +4,14 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, WebAppInfo
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models import Employee, TelegramUser, UserRole
 from app.models.smm import SMMTaskRate
 from app.services.smm import get_smm_access, assign_smm, submit_task, smm_payroll
+from app.config import settings
 
 router = Router()
 
@@ -23,11 +24,14 @@ class SMMTaskState(StatesGroup):
 
 
 def menu():
-    return InlineKeyboardMarkup(inline_keyboard=[
+    rows = [
         [InlineKeyboardButton(text="📱 Моя аналитика", callback_data="smm:analytics")],
+        [InlineKeyboardButton(text="🌐 Соцсети · площадки", callback_data="smm:social")],
+        [InlineKeyboardButton(text="📣 Реклама · рекомендации", callback_data="smm:advertising")],
         [InlineKeyboardButton(text="➕ Зафиксировать работу", callback_data="smm:task")],
         [InlineKeyboardButton(text="💰 Моя оплата", callback_data="smm:salary")],
-    ])
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def owner_id(message: Message | CallbackQuery):
@@ -53,6 +57,30 @@ async def smm_command(message: Message):
 @router.message(F.text == "📱 SMM кабинет")
 async def smm_menu(message: Message):
     await open_smm(message)
+
+
+@router.callback_query(F.data == "smm:social")
+async def smm_social(call: CallbackQuery):
+    async with SessionLocal() as session:
+        access = await get_smm_access(session, call.from_user.id)
+    if not access or "social" not in {x.strip() for x in access.analytics_access.split(",") if x.strip()}:
+        await call.answer("Нет доступа", show_alert=True); return
+    if settings.mini_app_url:
+        await call.message.answer("🌐 Открываю аналитику 2ГИС, VK, Telegram и Яндекс Карт.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть аналитику соцсетей", web_app=WebAppInfo(url=settings.mini_app_url.rstrip('/') + '/static/social.html'))]]))
+    else:
+        await call.message.answer("Mini App URL не настроен.")
+    await call.answer()
+
+
+@router.callback_query(F.data == "smm:advertising")
+async def smm_advertising(call: CallbackQuery):
+    async with SessionLocal() as session:
+        access = await get_smm_access(session, call.from_user.id)
+    if not access or "advertising" not in {x.strip() for x in access.analytics_access.split(",") if x.strip()}:
+        await call.answer("Нет доступа", show_alert=True); return
+    if settings.mini_app_url:
+        await call.message.answer("📣 Открываю рекомендации по рекламе на основе статистики.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть рекомендации", web_app=WebAppInfo(url=settings.mini_app_url.rstrip('/') + '/static/advertising.html'))]]))
+    await call.answer()
 
 
 @router.callback_query(F.data == "smm:analytics")
