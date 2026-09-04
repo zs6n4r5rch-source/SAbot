@@ -7,6 +7,8 @@ from app.models import Employee, GuestTelegram, MarketingCampaign, MarketingReci
 from app.services.auth import get_access
 from app.services.langame import langame_client
 from app.bot.admin_profiles import admin_list_kb
+from app.bot.owner_dashboard import dashboard_text
+from app.bot.inline_keyboards import owner_inline_menu
 
 router = Router()
 
@@ -34,6 +36,18 @@ async def is_owner(call: CallbackQuery):
             select(TelegramUser).where(TelegramUser.telegram_id == call.from_user.id)
         )).scalar_one_or_none()
     return bool(user and user.active and user.role == UserRole.OWNER.value)
+
+
+@router.callback_query(F.data == "nav:owner")
+async def owner_navigation_back(call: CallbackQuery):
+    if not await is_owner(call):
+        await call.answer("Нет доступа", show_alert=True)
+        return
+    await call.message.edit_text(
+        await dashboard_text(),
+        reply_markup=owner_inline_menu(),
+    )
+    await call.answer()
 
 
 @router.callback_query(F.data == "owner:admins")
