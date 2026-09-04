@@ -12,6 +12,7 @@ def owner_inline_menu(mini_app_url: str | None = None):
         [_btn("🍔 Бар и снеки", "owner:inventory"), _btn("🏆 Бонусы", "owner:bonuses")],
         [_btn("⚠️ Штрафы", "owner:penalties"), _btn("🔔 Требует внимания", "owner:attention")],
         [_btn("📣 Рассылки", "owner:broadcast"), _btn("⚙️ Настройки", "owner:settings")],
+        [_btn("🔄 Перезапустить бота", "system:restart")],
     ]
     if mini_app_url:
         rows.insert(0, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=mini_app_url))])
