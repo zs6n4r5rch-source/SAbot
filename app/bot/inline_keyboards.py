@@ -7,7 +7,6 @@ def _btn(text: str, callback: str):
 
 def owner_inline_menu(mini_app_url: str | None = None):
     rows = [
-        [_btn("📊 Статистика", "owner:statistics")],
         [_btn("👥 Администраторы", "owner:admins"), _btn("👥 Клиенты", "owner:clients")],
         [_btn("💰 Финансы", "owner:finance"), _btn("📈 Аналитика", "owner:analytics")],
         [_btn("🍔 Бар и снеки", "owner:inventory"), _btn("🏆 Бонусы", "owner:bonuses")],
@@ -17,6 +16,7 @@ def owner_inline_menu(mini_app_url: str | None = None):
     ]
     if mini_app_url:
         base = mini_app_url.rstrip("/")
+        rows.insert(0, [InlineKeyboardButton(text="📊 Статистика · все данные", web_app=WebAppInfo(url=base + "/static/statistics.html"))])
         rows.insert(1, [InlineKeyboardButton(text="📊 Business Dashboard · Langame", web_app=WebAppInfo(url=base + "/static/business.html"))])
         rows.insert(2, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=base))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
