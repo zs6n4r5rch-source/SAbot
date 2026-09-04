@@ -206,7 +206,7 @@ async def dashboard_text():
 
 
     return (
-        "👑 <b>Панель владельца</b>\n\n"
+        "📅 <b>Ежедневная сводка</b>\n\n"
         f"📅 {datetime.now():%d.%m.%Y}\n\n"
 
         f"💰 Продажи бара и снеков: "
@@ -239,108 +239,10 @@ async def attention_text():
 
     m = await metrics()
 
-
-    lines = [
-        "🔔 <b>Требует внимания</b>",
-        "",
-    ]
-
-
-    if m["critical_stock"]:
-        lines.append(
-            f"🔴 Остатки: {m['critical_stock']} позиций"
-        )
-
-
-    if m["pending_writeoffs"]:
-        lines.append(
-            f"📋 Списания: {m['pending_writeoffs']}"
-        )
-
-
-    if m["discrepancies"]:
-        lines.append(
-            f"⚠️ Расхождения: {m['discrepancies']}"
-        )
-
-
-    if m["close_reports"]:
-        lines.append(
-            f"📄 Отчёты смен: {m['close_reports']}"
-        )
-
-
-    if m["open_shifts"]:
-        lines.append(
-            f"🟢 Открытые смены: {m['open_shifts']}"
-        )
-
-
-    if len(lines) == 2:
-
-        lines.append(
-            "✅ Критичных задач нет."
-        )
-
-
-    return "\n".join(lines)
-
-
-
-@router.message(F.text == "🔔 Требует внимания")
-async def attention_button(message: Message):
-
-    if not await is_owner(
-        message.from_user.id
-        if message.from_user else None
-    ):
-
-        await message.answer(
-            "⛔ Только для владельца."
-        )
-
-        return
-
-
-
-    await message.answer(
-        await attention_text(),
-        reply_markup=dashboard_keyboard(),
+    return (
+        "🔔 <b>Требует внимания</b>\n\n"
+        f"⚠️ Критические остатки: <b>{m['critical_stock']}</b>\n"
+        f"📋 Списания ожидают: <b>{m['pending_writeoffs']}</b>\n"
+        f"⚠️ Расхождения: <b>{m['discrepancies']}</b>\n"
+        f"📄 Отчёты закрытия смен: <b>{m['close_reports']}</b>"
     )
-
-
-
-@router.callback_query(F.data.startswith("dashboard:"))
-async def dashboard_callback(call: CallbackQuery):
-
-    if not await is_owner(call.from_user.id):
-
-        await call.answer(
-            "Нет доступа",
-            show_alert=True,
-        )
-
-        return
-
-
-
-    action = call.data.split(":")[1]
-
-
-    if action == "attention":
-
-        text = await attention_text()
-
-    else:
-
-        text = await dashboard_text()
-
-
-
-    await call.message.answer(
-        text,
-        reply_markup=dashboard_keyboard(),
-    )
-
-
-    await call.answer()
