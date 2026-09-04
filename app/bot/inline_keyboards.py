@@ -15,7 +15,8 @@ def owner_inline_menu(mini_app_url: str | None = None):
         [_btn("🔄 Перезапустить бота", "system:restart")],
     ]
     if mini_app_url:
-        rows.insert(0, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=mini_app_url))])
+        rows.insert(0, [InlineKeyboardButton(text="📊 Business Dashboard · Langame", web_app=WebAppInfo(url=mini_app_url.rstrip("/") + "/static/business.html"))])
+        rows.insert(1, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=mini_app_url))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
