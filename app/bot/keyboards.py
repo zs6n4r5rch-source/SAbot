@@ -34,7 +34,7 @@ def owner_menu():
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="👑 Панель владельца"),
+                KeyboardButton(text="📅 Ежедневная сводка"),
                 KeyboardButton(text="👥 Администраторы"),
             ],
             [
