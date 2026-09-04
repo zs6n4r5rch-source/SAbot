@@ -23,7 +23,11 @@ async def _stop_process():
 
 @router.callback_query(F.data == "system:restart")
 async def restart_callback(callback: CallbackQuery):
-    if not callback.message or not await _owner(callback.message):
+    if not callback.message:
+        await callback.answer("⛔ Только для владельца.", show_alert=True)
+        return
+    actor_message = callback.message.model_copy(update={"from_user": callback.from_user})
+    if not await _owner(actor_message):
         await callback.answer("⛔ Только для владельца.", show_alert=True)
         return
     await callback.answer("Перезапускаю…")
