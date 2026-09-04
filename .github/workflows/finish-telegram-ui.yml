@@ -1,0 +1,68 @@
+name: Finish Telegram UI patch
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'Finish Telegram UI patch')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch UI
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('app/bot/admin_profiles.py')
+          s = p.read_text()
+          old = '[InlineKeyboardButton(text="📜 Аудит", callback_data=f"aprofile_audit:{eid}")],'
+          new = old + '\n        [InlineKeyboardButton(text="🗑 Удалить администратора", callback_data=f"aprofile_delete:{eid}")],'
+          if 'aprofile_delete:' not in s:
+              s = s.replace(old, new, 1)
+              s += '''\n\n@router.callback_query(F.data.startswith("aprofile_delete:"))\nasync def profile_delete_callback(call: CallbackQuery):\n    if not await is_owner(call.from_user.id if call.from_user else None):\n        await call.answer("Нет доступа", show_alert=True); return\n    eid = int(call.data.split(":")[1])\n    async with SessionLocal() as session:\n        employee = await session.get(Employee, eid)\n        if employee is None:\n            await call.answer("Администратор не найден", show_alert=True); return\n        links = (await session.execute(select(TelegramUser).where(TelegramUser.employee_id == eid))).scalars().all()\n        if any(u.role == UserRole.OWNER.value for u in links):\n            await call.answer("Владельца удалить нельзя", show_alert=True); return\n        employee.active = False\n        for u in links:\n            u.active = False\n        await session.commit()\n    await call.message.edit_text("🗑 <b>Администратор деактивирован.</b>\n\nИстория смен, зарплаты и нарушений сохранена. Доступ Telegram отключён.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ К администраторам", callback_data="aprofiles:list")]]))\n    await call.answer("Доступ отключён")\n'''
+              p.write_text(s)
+
+          p = Path('app/bot/salary.py')
+          s = p.read_text()
+          if 'owner_bonus_employee:' not in s:
+              marker = '@router.message(F.text == "🏆 Бонусы")'
+              idx = s.find(marker)
+              if idx == -1: raise SystemExit('salary owner bonuses marker not found')
+              end = s.find('\n@router.', idx + len(marker))
+              if end == -1: end = len(s)
+              block = '''def owner_bonus_keyboard(employees):\n    rows = [[InlineKeyboardButton(text=f"👤 {(e.full_name or f'Администратор #{e.id}')[:38]}", callback_data=f"owner_bonus_employee:{e.id}")] for e in employees]\n    rows.append([InlineKeyboardButton(text="⬅️ Панель владельца", callback_data="nav:owner")])\n    return InlineKeyboardMarkup(inline_keyboard=rows)\n\n\n@router.message(F.text == "🏆 Бонусы")\nasync def owner_bonuses_view(message: Message):\n    user = await get_access(message)\n    if user is None or user.role != UserRole.OWNER.value:\n        await message.answer("⛔ Только владелец.")\n        return\n    async with SessionLocal() as session:\n        employees = (await session.execute(select(Employee).where(Employee.active.is_(True)).order_by(Employee.full_name.asc()))).scalars().all()\n        text = await _owner_bonus_dashboard(session)\n    await message.answer(text, reply_markup=owner_bonus_keyboard(employees))\n\n\n@router.callback_query(F.data.startswith("owner_bonus_employee:"))\nasync def owner_bonus_employee_callback(call: CallbackQuery):\n    if not await owner_only(call.message):\n        await call.answer(); return\n    eid = int(call.data.split(":")[1])\n    async with SessionLocal() as session:\n        employee = await session.get(Employee, eid)\n        if employee is None or not employee.active:\n            await call.answer("Администратор не найден", show_alert=True); return\n        text = await _current_month_bonus_status(eid, session)\n    await call.message.edit_text(f"👤 <b>{employee.full_name or f'Администратор #{eid}'}</b>\n\n{text}", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Все администраторы", callback_data="owner_bonuses_all")]]))\n    await call.answer()\n\n\n@router.callback_query(F.data == "owner_bonuses_all")\nasync def owner_bonuses_all_callback(call: CallbackQuery):\n    if not await owner_only(call.message):\n        await call.answer(); return\n    async with SessionLocal() as session:\n        employees = (await session.execute(select(Employee).where(Employee.active.is_(True)).order_by(Employee.full_name.asc()))).scalars().all()\n        text = await _owner_bonus_dashboard(session)\n    await call.message.edit_text(text, reply_markup=owner_bonus_keyboard(employees))\n    await call.answer()\n'''
+              s = s[:idx] + block + s[end:]
+              p.write_text(s)
+
+          p = Path('app/webapp/app.py')
+          s = p.read_text()
+          old = '        data = await langame_client.guests_search(query=q or None, size=min(max(limit, 1), 100))\n        return {"source": "langame", "data": data}'
+          new = '''        data = await langame_client.guests_search(query=q or None, size=min(max(limit, 1), 100))\n        items = data.get("items") or data.get("data") or []\n        if isinstance(items, dict):\n            items = items.get("items") or items.get("data") or []\n        return {"source": "langame", "items": items, "data": data}'''
+          if old in s:
+              s = s.replace(old, new, 1)
+          if '@app.get("/api/mailings")' not in s:
+              marker = 'class PenaltyRequest(BaseModel):'
+              endpoint = '''@app.get("/api/mailings")\nasync def mailings_api(request: Request, limit: int = 20):\n    user, _ = await current_user(request)\n    owner_required(user)\n    from app.models import MarketingCampaign, MarketingRecipient, RecipientStatus, GuestTelegram\n    async with SessionLocal() as session:\n        campaigns = (await session.execute(select(MarketingCampaign).order_by(MarketingCampaign.id.desc()).limit(min(max(limit, 1), 50)))).scalars().all()\n        linked = await session.scalar(select(func.count(GuestTelegram.id)).where(GuestTelegram.marketing_consent.is_(True)))\n        items = []\n        for c in campaigns:\n            total = await session.scalar(select(func.count(MarketingRecipient.id)).where(MarketingRecipient.campaign_id == c.id))\n            sent = await session.scalar(select(func.count(MarketingRecipient.id)).where(MarketingRecipient.campaign_id == c.id, MarketingRecipient.status == RecipientStatus.SENT.value))\n            items.append({"id": c.id, "name": c.name, "status": c.status, "created_at": iso(c.created_at), "recipients": int(total or 0), "sent": int(sent or 0)})\n    return {"items": items, "consented_links": int(linked or 0), "note": "Отправка разрешена только клиентам с локальной Telegram-привязкой и marketing_consent=true."}\n\n\n'''
+              s = s.replace(marker, endpoint + marker, 1)
+          p.write_text(s)
+
+          p = Path('app/webapp/static/index.html')
+          s = p.read_text()
+          old = "async function mailings(){clear();back();root.insertAdjacentHTML('beforeend',card('📣 Рассылки','Создание и отправка рассылок сохраняются в существующем Telegram workflow. Здесь будет мобильная форма кампании после подключения Bot API отправки.'))}"
+          new = "async function mailings(){clear();back();const d=await api('/api/mailings');let body=row('Получателей с согласием',d.consented_links||0,'Локальные Telegram-привязки');if(d.items?.length)body+=d.items.map(x=>row('#'+x.id+' '+x.name,x.sent+'/'+x.recipients,x.status+' · '+(x.created_at||''))).join('');else body+='<div class=muted style=margin-top:12px>Кампаний пока нет. Создание/отправка остаются доступны в Telegram workflow.</div>';root.insertAdjacentHTML('beforeend',card('📣 Рассылки',body))}"
+          if old in s: s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Validate Python
+        run: python -m compileall -q app
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app
+          git diff --cached --quiet && exit 0
+          git commit -m "Finish Telegram UI patch"
+          git push
