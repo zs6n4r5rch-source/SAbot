@@ -5,7 +5,7 @@ from decimal import Decimal
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, User
 from sqlalchemy import select, func
 
 from app.db.session import SessionLocal
@@ -84,10 +84,17 @@ def penalty_confirmation_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="❌ Отмена", callback_data="penalty_cancel")],
     ])
 
-async def owner_only(message: Message):
-    user = await get_access(message)
-    if user is None or user.role != UserRole.OWNER.value:
-        await message.answer("⛔ Только владелец.")
+async def owner_only(message: Message | User):
+    if isinstance(message, User):
+        async with SessionLocal() as session:
+            user = await session.scalar(
+                select(TelegramUser).where(TelegramUser.telegram_id == message.id)
+            )
+    else:
+        user = await get_access(message)
+    if user is None or not user.active or user.role != UserRole.OWNER.value:
+        if isinstance(message, Message):
+            await message.answer("⛔ Только владелец.")
         return None
     return user
 
@@ -112,7 +119,7 @@ async def penalties_menu(message: Message):
 
 @router.callback_query(F.data == "penalty_close")
 async def penalty_close(callback: CallbackQuery, state: FSMContext):
-    if await owner_only(callback.message) is None:
+    if await owner_only(callback.from_user) is None:
         await callback.answer("⛔ Только владелец", show_alert=True)
         return
     await state.clear()
@@ -122,7 +129,7 @@ async def penalty_close(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("penalty_employee:"))
 async def penalty_employee(callback: CallbackQuery, state: FSMContext):
-    if await owner_only(callback.message) is None:
+    if await owner_only(callback.from_user) is None:
         await callback.answer("⛔ Только владелец", show_alert=True)
         return
     try:
@@ -145,7 +152,7 @@ async def penalty_employee(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("penalty_rule:"))
 async def penalty_rule(callback: CallbackQuery, state: FSMContext):
-    if await owner_only(callback.message) is None:
+    if await owner_only(callback.from_user) is None:
         await callback.answer("⛔ Только владелец", show_alert=True)
         return
     code = callback.data.split(":", 1)[1]
@@ -227,7 +234,7 @@ async def penalty_selected_input(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "penalty_cancel")
 async def penalty_cancel(callback: CallbackQuery, state: FSMContext):
-    if await owner_only(callback.message) is None:
+    if await owner_only(callback.from_user) is None:
         await callback.answer("⛔ Только владелец", show_alert=True)
         return
     await state.clear()
@@ -237,7 +244,7 @@ async def penalty_cancel(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "penalty_confirm")
 async def penalty_confirm(callback: CallbackQuery, state: FSMContext):
-    if await owner_only(callback.message) is None:
+    if await owner_only(callback.from_user) is None:
         await callback.answer("⛔ Только владелец", show_alert=True)
         return
     data = await state.get_data()
