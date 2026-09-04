@@ -1,7 +1,8 @@
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import func, select
 
+from app.config import settings
 from app.db.session import SessionLocal
 from app.models import Employee, GuestTelegram, MarketingCampaign, MarketingRecipient, RecipientStatus, TelegramUser, UserRole
 from app.services.auth import get_access
@@ -38,6 +39,11 @@ async def is_owner(call: CallbackQuery):
     return bool(user and user.active and user.role == UserRole.OWNER.value)
 
 
+async def is_owner_message(message: Message):
+    user = await get_access(message)
+    return bool(user and user.active and user.role == UserRole.OWNER.value)
+
+
 @router.callback_query(F.data == "nav:owner")
 async def owner_navigation_back(call: CallbackQuery):
     if not await is_owner(call):
@@ -45,7 +51,7 @@ async def owner_navigation_back(call: CallbackQuery):
         return
     await call.message.edit_text(
         await dashboard_text(),
-        reply_markup=owner_inline_menu(),
+        reply_markup=owner_inline_menu(settings.mini_app_url or None),
     )
     await call.answer()
 
@@ -69,11 +75,13 @@ async def owner_admins(call: CallbackQuery):
 @router.callback_query(F.data == "owner:clients")
 async def owner_clients(call: CallbackQuery):
     if not await is_owner(call):
-        await call.answer("Нет доступа", show_alert=True); return
+        await call.answer("Нет доступа", show_alert=True)
+        return
     try:
         data = await langame_client.guests_search(size=30)
         items = data.get("items") or data.get("data") or []
-        if isinstance(items, dict): items = items.get("items") or items.get("data") or []
+        if isinstance(items, dict):
+            items = items.get("items") or items.get("data") or []
         if not items:
             text = "👥 <b>Клиенты</b>\n\nLANGAME ответил, но клиентов в первой странице нет."
         else:
@@ -90,7 +98,8 @@ async def owner_clients(call: CallbackQuery):
 @router.callback_query(F.data == "owner:broadcast")
 async def owner_broadcast(call: CallbackQuery):
     if not await is_owner(call):
-        await call.answer("Нет доступа", show_alert=True); return
+        await call.answer("Нет доступа", show_alert=True)
+        return
     async with SessionLocal() as session:
         linked = await session.scalar(select(func.count(GuestTelegram.id)).where(GuestTelegram.marketing_consent.is_(True)))
         campaigns = (await session.execute(select(MarketingCampaign).order_by(MarketingCampaign.id.desc()).limit(15))).scalars().all()
@@ -112,3 +121,84 @@ async def owner_broadcast(call: CallbackQuery):
 @router.callback_query(F.data == "client:noop")
 async def client_noop(call: CallbackQuery):
     await call.answer("Карточка клиента будет открыта отдельным экраном.")
+
+
+# Compatibility layer for the old persistent OWNER ReplyKeyboard.
+# Telegram sends ReplyKeyboard presses as ordinary messages, so these
+# actions must remain valid even if a client still has the old keyboard cached.
+OWNER_MESSAGE_ALIASES = {
+    "👑 Панель владельца": "📅 Ежедневная сводка",
+    "📅 Ежедневная сводка": "📅 Ежедневная сводка",
+    "👥 Администраторы": "👥 Администраторы",
+    "🍔 Бар и снеки": "🍔 Бар и снеки",
+    "📊 Аналитика": "📊 Аналитика",
+    "💰 Финансы": "💰 Финансы",
+    "🏆 Бонусы": "🏆 Бонусы",
+    "🔔 Требует внимания": "🔔 Требует внимания",
+    "👥 Клиенты": "👥 Клиенты",
+    "📣 Рассылки": "📣 Рассылки",
+    "⚙️ Настройки": "⚙️ Настройки",
+}
+
+
+@router.message(F.text.in_(OWNER_MESSAGE_ALIASES.keys()))
+async def owner_reply_keyboard_dispatch(message: Message):
+    if not await is_owner_message(message):
+        await message.answer("⛔ Только для владельца.")
+        return
+
+    action = OWNER_MESSAGE_ALIASES[message.text.strip()]
+
+    if action == "📅 Ежедневная сводка":
+        await message.answer(
+            await dashboard_text(),
+            reply_markup=owner_inline_menu(settings.mini_app_url or None),
+        )
+    elif action == "👥 Администраторы":
+        async with SessionLocal() as session:
+            employees = (await session.execute(
+                select(Employee)
+                .where(Employee.active.is_(True))
+                .order_by(Employee.full_name.asc())
+            )).scalars().all()
+        await message.answer(
+            "👥 <b>Список администраторов</b>\n\nВыберите администратора для полной карточки.",
+            reply_markup=admin_list_kb(employees),
+        )
+    elif action == "🍔 Бар и снеки":
+        from app.bot.inventory import inventory_menu_handler
+        await inventory_menu_handler(message)
+    elif action == "📊 Аналитика":
+        from app.bot.analytics import analytics_menu
+        await analytics_menu(message)
+    elif action == "💰 Финансы":
+        from app.bot.finance import finance_button
+        await finance_button(message)
+    elif action == "🏆 Бонусы":
+        from app.bot.salary import owner_bonuses_view
+        await owner_bonuses_view(message)
+    elif action == "🔔 Требует внимания":
+        from app.bot.owner_dashboard import attention_button
+        await attention_button(message)
+    elif action == "👥 Клиенты":
+        await message.answer("👥 <b>Клиенты</b>\n\nОткрываю данные LANGAME…")
+        try:
+            data = await langame_client.guests_search(size=30)
+            items = data.get("items") or data.get("data") or []
+            if isinstance(items, dict):
+                items = items.get("items") or items.get("data") or []
+            if not items:
+                text = "LANGAME ответил, но клиентов в первой странице нет."
+            else:
+                lines = [f"<b>Клиенты из LANGAME</b> · {len(items)}", ""]
+                for x in items[:30]:
+                    lines.append(f"• <b>{x.get('fio') or x.get('name') or 'Без имени'}</b> · {x.get('phone') or '—'}")
+                text = "\n".join(lines)
+        except Exception as exc:
+            text = f"❌ LANGAME временно недоступен.\n{str(exc)[:300]}"
+        await message.answer(text, reply_markup=owner_back())
+    elif action == "📣 Рассылки":
+        await message.answer("📣 <b>Рассылки</b>\n\nРаздел открывается из inline-меню.", reply_markup=owner_back())
+    elif action == "⚙️ Настройки":
+        from app.bot.handlers import settings_menu
+        await settings_menu(message)
