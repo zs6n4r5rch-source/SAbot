@@ -75,9 +75,6 @@ async def main():
     finally:
         if not webhook_mode:
             await polling_lock.release()
-        else:
-            from app.services.telegram_webhook import remove_webhook
-            await remove_webhook(bot)
         web_server.should_exit = True
         if not web_task.done():
             await web_task
