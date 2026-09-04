@@ -7,17 +7,17 @@ def _btn(text: str, callback: str):
 
 def owner_inline_menu(mini_app_url: str | None = None):
     rows = [
-        [_btn("👥 Администраторы", "owner:admins"), _btn("👥 Клиенты", "owner:clients")],
-        [_btn("💰 Финансы", "owner:finance"), _btn("📈 Аналитика", "owner:analytics")],
+        [_btn("👥 Администраторы", "owner:admins"), _btn("👥 Гости", "owner:clients")],
+        [_btn("💰 Финансы", "owner:finance"), _btn("📈 Статистика", "owner:analytics")],
         [_btn("🍔 Бар и снеки", "owner:inventory"), _btn("🏆 Бонусы", "owner:bonuses")],
-        [_btn("⚠️ Штрафы", "owner:penalties"), _btn("🔔 Требует внимания", "owner:attention")],
+        [_btn("⚠️ Штрафы", "owner:penalties"), _btn("🔔 Внимание", "owner:attention")],
         [_btn("📣 Рассылки", "owner:broadcast"), _btn("⚙️ Настройки", "owner:settings")],
         [_btn("🔄 Перезапустить бота", "system:restart")],
     ]
     if mini_app_url:
         base = mini_app_url.rstrip("/")
         rows.insert(0, [InlineKeyboardButton(text="📊 Статистика · все данные", web_app=WebAppInfo(url=base + "/static/statistics.html"))])
-        rows.insert(1, [InlineKeyboardButton(text="📊 Business Dashboard · Langame", web_app=WebAppInfo(url=base + "/static/business.html"))])
+        rows.insert(1, [InlineKeyboardButton(text="👥 Гости · сегменты и решения", web_app=WebAppInfo(url=base + "/static/guests.html"))])
         rows.insert(2, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=base))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
