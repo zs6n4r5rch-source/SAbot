@@ -15,8 +15,10 @@ def owner_inline_menu(mini_app_url: str | None = None):
         [_btn("🔄 Перезапустить бота", "system:restart")],
     ]
     if mini_app_url:
-        rows.insert(0, [InlineKeyboardButton(text="📊 Business Dashboard · Langame", web_app=WebAppInfo(url=mini_app_url.rstrip("/") + "/static/business.html"))])
-        rows.insert(1, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=mini_app_url))])
+        base = mini_app_url.rstrip("/")
+        rows.insert(0, [InlineKeyboardButton(text="📊 Business Dashboard · Langame", web_app=WebAppInfo(url=base + "/static/business.html"))])
+        rows.insert(1, [InlineKeyboardButton(text="📈 Глубокая статистика", web_app=WebAppInfo(url=base + "/static/deep-analytics.html"))])
+        rows.insert(2, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=base))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
