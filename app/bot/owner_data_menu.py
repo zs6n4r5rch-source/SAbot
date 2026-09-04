@@ -3,9 +3,10 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
-from app.models import GuestTelegram, MarketingCampaign, MarketingRecipient, RecipientStatus, TelegramUser, UserRole
+from app.models import Employee, GuestTelegram, MarketingCampaign, MarketingRecipient, RecipientStatus, TelegramUser, UserRole
 from app.services.auth import get_access
 from app.services.langame import langame_client
+from app.bot.admin_profiles import admin_list_kb
 
 router = Router()
 
@@ -26,8 +27,29 @@ def client_page(items):
 
 
 async def is_owner(call: CallbackQuery):
-    user = await get_access(call.message)
+    if not call.from_user:
+        return False
+    async with SessionLocal() as session:
+        user = (await session.execute(
+            select(TelegramUser).where(TelegramUser.telegram_id == call.from_user.id)
+        )).scalar_one_or_none()
     return bool(user and user.active and user.role == UserRole.OWNER.value)
+
+
+@router.callback_query(F.data == "owner:admins")
+async def owner_admins(call: CallbackQuery):
+    if not await is_owner(call):
+        await call.answer("Нет доступа", show_alert=True)
+        return
+    async with SessionLocal() as session:
+        employees = (await session.execute(
+            select(Employee)
+            .where(Employee.active.is_(True))
+            .order_by(Employee.full_name.asc())
+        )).scalars().all()
+    text = "👥 <b>Список администраторов</b>\n\nВыберите администратора для полной карточки."
+    await call.message.edit_text(text, reply_markup=admin_list_kb(employees))
+    await call.answer()
 
 
 @router.callback_query(F.data == "owner:clients")
