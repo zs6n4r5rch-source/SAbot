@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Strike Arena</title>
+<script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+<style>
+:root{color-scheme:light dark}
+*{box-sizing:border-box}body{margin:0;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#111);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{padding:calc(12px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));max-width:760px;margin:auto}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.title{font-size:25px;font-weight:800}.sub{color:var(--tg-theme-hint-color,#777);font-size:13px;margin-top:3px}
+.card{background:var(--tg-theme-secondary-bg-color,#f2f2f2);border-radius:16px;padding:14px;margin:10px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+button{width:100%;border:0;border-radius:14px;padding:14px 10px;background:var(--tg-theme-secondary-bg-color,#eee);color:var(--tg-theme-text-color);font-size:14px;font-weight:700}
+button.primary{background:var(--tg-theme-button-color,#2481cc);color:var(--tg-theme-button-text-color,#fff);grid-column:1/-1}
+button.danger{background:#b3261e;color:white}.back{margin-bottom:10px}
+.hidden{display:none}.row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--tg-theme-section-separator-color,#ddd)}.row:last-child{border-bottom:0}
+.kpi{font-size:23px;font-weight:800}.muted{color:var(--tg-theme-hint-color,#777)}.badge{display:inline-block;border-radius:9px;padding:4px 7px;font-size:11px;background:var(--tg-theme-bg-color,#fff)}
+input,textarea,select{width:100%;padding:12px;border:1px solid var(--tg-theme-hint-color,#aaa);border-radius:11px;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color);font-size:15px;margin:5px 0 10px}
+h2{font-size:20px;margin:4px 0 12px}.error{color:#b3261e}.ok{color:#188038}.full{grid-column:1/-1}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="header"><div><div class="title">Strike Arena</div><div class="sub" id="hello">Загрузка…</div></div><button id="refresh" style="width:auto;padding:9px 12px">↻</button></header>
+<div id="error" class="card error hidden"></div>
+<main id="root"></main>
+</div>
+<script>
+const tg=window.Telegram?.WebApp;
+if(tg){tg.ready();tg.expand();tg.enableClosingConfirmation?.();}
+const headers={'X-Telegram-Init-Data':tg?.initData||''};
+const root=document.getElementById('root'), err=document.getElementById('error');
+let me=null;
+async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{...headers,...(opt.headers||{}),'Content-Type':'application/json'}});if(!r.ok)throw new Error((await r.text())||r.statusText);return r.json();}
+function fail(e){err.textContent='Ошибка: '+e.message;err.classList.remove('hidden');}
+function clear(){err.classList.add('hidden');root.innerHTML=''}
+function btn(text,fn,cls=''){const b=document.createElement('button');b.textContent=text;b.className=cls;b.onclick=fn;return b}
+function card(title,body){return `<section class="card"><h2>${title}</h2>${body}</section>`}
+function money(x){return Number(x||0).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽'}
+function row(a,b,c=''){return `<div class="row"><div>${a}<div class="muted">${c}</div></div><b>${b}</b></div>`}
+function back(){const b=btn('← Главное меню',home,'back');root.prepend(b)}
+async function home(){
+ clear();const s=await api('/api/summary');document.getElementById('hello').textContent=`${me.display_name||'Пользователь'} · ${me.role==='owner'?'OWNER':'ADMIN'}`;
+ let items=me.role==='owner'?[
+ ['👥 Администраторы',admins],['👥 Клиенты',clients],['💰 Финансы',finance],['📊 Аналитика',analytics],
+ ['🍔 Бар и снеки',inventory],['🏆 Бонусы',bonuses],['⚠️ Штрафы',penalties],['🔔 Требует внимания',attention],
+ ['📣 Рассылки',mailings],['⚙️ Настройки',settings]
+ ]:[
+ ['🍔 Бар и снеки',inventory],['📋 Мои смены',shifts],['📊 Моя статистика',analytics],['💰 Моя зарплата',salary],
+ ['🏆 Мои бонусы',bonuses],['🔒 Закрыть смену',()=>alert('Закрытие смены выполняется через рабочий экран бота.')]
+ ];
+ root.innerHTML=card('Панель управления',`<div class="grid" id="menu"></div>`);
+ const m=document.getElementById('menu');m.appendChild(btn('🚀 Обновить данные',home,'primary'));
+ items.forEach(([t,f])=>m.appendChild(btn(t,f)));
+ root.insertAdjacentHTML('beforeend',card('Сводка',row('Сотрудники',s.employees)+row('Открытые смены',s.open_shifts)+row('Штрафы за 30 дней',s.violations_30d)+row('Критические остатки',s.critical_stock)));
+}
+async function admins(){clear();back();const d=await api('/api/admins');root.insertAdjacentHTML('beforeend',card('👥 Администраторы',d.items.length?d.items.map(x=>row(x.name,x.access_active?'Доступ':'Нет доступа',`${x.role} · ${x.telegram_id?'Telegram привязан':'Telegram не привязан'}`)).join(''):'Нет сотрудников'))}
+async function clients(){clear();back();root.insertAdjacentHTML('beforeend',card('👥 Клиенты',`<input id="cq" placeholder="Имя или телефон"><button class="primary" id="cs">🔎 Поиск</button><div id="cl"></div>`));document.getElementById('cs').onclick=async()=>{const d=await api('/api/clients?q='+encodeURIComponent(document.getElementById('cq').value));const box=document.getElementById('cl');if(d.items)box.innerHTML=d.items.map(x=>row(x.fio||'Без имени',x.phone||'—','Langame ID '+(x.langame_guest_id||x.id))).join('');else box.innerHTML='<div class="muted">Данные получены из Langame.</div><pre style="white-space:pre-wrap">'+JSON.stringify(d.data,null,2).slice(0,8000)+'</pre>'}}
+async function inventory(){clear();back();const d=await api('/api/inventory');root.insertAdjacentHTML('beforeend',card('🍔 Бар и снеки',d.items.length?d.items.map(x=>row(x.product,`${x.quantity} / ${x.min_stock}`,x.club+(x.critical?' · ⚠️ Критический остаток':''))).join(''):'Нет данных. Выполните синхронизацию Langame через бот.'))}
+async function finance(){clear();back();const d=await api('/api/finance?days=30');root.insertAdjacentHTML('beforeend',card('💰 Финансы · 30 дней',row('Продажи',money(d.sales))+row('Продано единиц',d.units)+row('Зарплата',money(d.salary))+row('Штрафы',money(d.penalties))+row('Результат',money(d.net_before_other))))}
+async function analytics(){clear();back();if(me.role==='admin'){const d=await api('/api/my-stats');root.insertAdjacentHTML('beforeend',card('📊 Моя статистика · 30 дней',row('Смены',d.shifts_30d)+row('Открытая смена',d.open_shift?'🟢 Да':'Нет')+row('Штрафы',money(d.penalties))));return}const d=await api('/api/analytics?days=30');root.insertAdjacentHTML('beforeend',card('📊 Аналитика · 30 дней',`<div class="kpi">${money((d.sales_rows||[]).reduce((s,x)=>s+Number(x.amount||x.sales_amount||0),0))}</div><div class="muted">Продажи по данным аналитики</div>`));if(d.ranking?.length)root.insertAdjacentHTML('beforeend',card('🏆 Рейтинг',d.ranking.map((x,i)=>row(`${i+1}. ${x.name||x.full_name||'Администратор'}`,x.score??x.amount??'',x.hours?x.hours+' ч':'')).join('')))}
+async function shifts(){clear();back();const d=await api('/api/shifts?days=30');root.insertAdjacentHTML('beforeend',card('📋 Смены · 30 дней',d.items.map(x=>row(x.employee,x.status==='open'?'🟢 Открыта':'Закрыта',`${x.started_at||''} → ${x.ended_at||''}`)).join('')||'Нет смен'))}
+async function salary(){clear();back();const d=await api('/api/my-salary');root.insertAdjacentHTML('beforeend',card('💰 Моя зарплата',d.items.map(x=>row(`${x.from} — ${x.to}`,money(x.total),`база ${money(x.base)} · бонус ${money(x.bonus)} · ${x.status}`)).join('')||'Расчётов пока нет'))}
+async function bonuses(){clear();back();const d=await api('/api/bonuses');root.insertAdjacentHTML('beforeend',card('🏆 Бонусы',d.items.map(x=>row(x.employee,x.title,`${x.type} · ${x.created_at||''}`)).join('')||'Бонусов нет'))}
+async function attention(){clear();back();const d=await api('/api/attention');root.insertAdjacentHTML('beforeend',card('🔔 Требует внимания',row('Критические остатки',d.critical_stock)+row('Требуют решения по увольнению',d.dismissal_required)))}
+async function penalties(){clear();back();const d=await api('/api/penalties');root.insertAdjacentHTML('beforeend',card('⚠️ Штрафы',`<button class="primary" id="newp">➕ Назначить штраф</button><div id="pl">${d.items.map(x=>row(x.employee,`${money(x.amount)}`,`${x.title} · ${x.created_at||''}${x.premium_reduction_percent?' · Премия −100%':''}${x.dismissal_required?' · ⚠️ Увольнение':''}`)).join('')||'Штрафов нет'}</div>`));document.getElementById('newp').onclick=penaltyForm}
+async function penaltyForm(){const r=await api('/api/penalty-rules'),a=await api('/api/admins');clear();back();root.insertAdjacentHTML('beforeend',card('➕ Новый штраф',`<label>Сотрудник</label><select id="pe">${a.items.filter(x=>x.access_active||x.role==='not_linked').map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select><label>Нарушение</label><select id="pr">${r.items.map(x=>`<option value="${x.code}">${x.title} — ${money(x.amount)}${x.premium?' · −100% премии':''}</option>`).join('')}</select><label>Комментарий</label><textarea id="pc" maxlength="4000" placeholder="Комментарий"></textarea><button class="primary" id="save">⚠️ Подтвердить штраф</button>`));document.getElementById('save').onclick=async()=>{if(!confirm('Назначить штраф?'))return;await api('/api/penalties',{method:'POST',body:JSON.stringify({employee_id:Number(pe.value),code:pr.value,comment:pc.value})});alert('Штраф сохранён');penalties()}}
+async function mailings(){clear();back();root.insertAdjacentHTML('beforeend',card('📣 Рассылки','Создание и отправка рассылок сохраняются в существующем Telegram workflow. Здесь будет мобильная форма кампании после подключения Bot API отправки.'))}
+async function settings(){clear();back();const d=await api('/api/settings');root.insertAdjacentHTML('beforeend',card('⚙️ Настройки',d.configured?row('Ежедневный отчёт',d.enabled?'Включён':'Выключен')+row('Часовой пояс',d.timezone)+row('Время',String(d.hour).padStart(2,'0')+':'+String(d.minute).padStart(2,'0')):'Настройки ещё не созданы')+card('🔐 Безопасность','Роль и Telegram ID проверяются на сервере по подписанному Telegram initData.'))}
+document.getElementById('refresh').onclick=home;
+(async()=>{try{me=await api('/api/me');await home()}catch(e){fail(e)}})();
+</script>
+</body></html>

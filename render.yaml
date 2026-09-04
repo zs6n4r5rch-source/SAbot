@@ -1,0 +1,38 @@
+databases:
+  - name: strike-arena-db
+    plan: free
+    databaseName: strike_arena
+    user: strike
+
+services:
+  - type: web
+    name: strike-arena
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: strike-arena-db
+          property: connectionString
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: LANGAME_API_KEY
+        sync: false
+      - key: OWNER_TELEGRAM_IDS
+        sync: false
+      - key: LANGAME_BASE_URL
+        value: https://sa-vlg1.langame.ru/public_api
+      - key: LANGAME_READ_ONLY
+        value: "true"
+      - key: MINI_APP_URL
+        sync: false
+      - key: WEB_HOST
+        value: 0.0.0.0
+      - key: REPORT_TIMEZONE
+        value: Europe/Moscow
+      - key: REPORT_HOUR
+        value: "9"
+      - key: REPORT_MINUTE
+        value: "0"
