@@ -53,7 +53,7 @@ from app.bot.owner_dashboard import (
 
 
 OWNER_MENU_BUTTONS = {
-    "👑 Панель владельца",
+    "📅 Ежедневная сводка",
     "👥 Администраторы",
     "🍔 Бар и снеки",
     "📊 Аналитика",
@@ -71,12 +71,12 @@ async def owner_callback_dispatch(callback: CallbackQuery):
     if not callback.message:
         await callback.answer()
         return
-    if not await is_owner(callback.message):
+    if not await owner_dashboard_is_owner(callback.from_user.id if callback.from_user else None):
         await callback.answer("⛔ Только для владельца.", show_alert=True)
         return
     await callback.answer()
     action = callback.data.split(":", 1)[1]
-    message = callback.message
+    message = callback.message.model_copy(update={"from_user": callback.from_user})
     if action == "dashboard":
         await message.edit_text(await dashboard_text(), reply_markup=owner_inline_menu(settings.mini_app_url or None))
     elif action == "admins":
@@ -114,12 +114,12 @@ async def admin_callback_dispatch(callback: CallbackQuery):
     if not callback.message:
         await callback.answer()
         return
-    user = await get_access(callback.message)
+    user = await get_access(callback.message.model_copy(update={"from_user": callback.from_user}))
     if not user or user.role != UserRole.ADMIN.value:
         await callback.answer("⛔ Доступ запрещён.", show_alert=True)
         return
     await callback.answer()
-    message = callback.message
+    message = callback.message.model_copy(update={"from_user": callback.from_user})
     action = callback.data.split(":", 1)[1]
     if action == "inventory":
         from app.bot.inventory import inventory_menu_handler
@@ -143,7 +143,7 @@ async def owner_back_callback(callback: CallbackQuery):
     if not callback.message:
         await callback.answer()
         return
-    if not await is_owner(callback.message):
+    if not await owner_dashboard_is_owner(callback.from_user.id if callback.from_user else None):
         await callback.answer("⛔ Только для владельца.", show_alert=True)
         return
     await callback.answer()
@@ -158,7 +158,7 @@ async def owner_menu_dispatch(message: Message):
 
     text = (message.text or "").strip()
 
-    if text == "👑 Панель владельца":
+    if text == "📅 Ежедневная сводка":
         await message.answer(
             await dashboard_text(),
             reply_markup=dashboard_keyboard(),
