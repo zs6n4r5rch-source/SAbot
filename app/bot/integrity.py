@@ -54,7 +54,7 @@ async def _rows(days: int = 30):
             Writeoff.status == WriteoffStatus.APPROVED.value))).all()
         audit_ops = (await session.execute(select(InventoryOperation).where(
             InventoryOperation.employee_id.is_not(None), InventoryOperation.created_at >= start, InventoryOperation.created_at <= end,
-            InventoryOperation.operation_type.in_(["manual_adjustment", "inventory_adjustment"]))).scalars().all())
+            InventoryOperation.operation_type.in_(["manual_adjustment", "inventory_adjustment"])))) .scalars().all()
 
     shift_map = {int(s.langame_shift_id): s for s in shifts}
     stats = {e.id: {
@@ -93,7 +93,6 @@ async def _rows(days: int = 30):
         if x:
             x["manual_adjustments"] += 1
 
-    # Product sales are linked to employees through LANGAME working_shift_id.
     try:
         for row in await sales_rows(start, end):
             sid = row.get("working_shift_id")
@@ -111,10 +110,8 @@ async def _rows(days: int = 30):
             except Exception:
                 continue
     except Exception:
-        # Risk analysis must not break Owner UI if LANGAME is temporarily unavailable.
         pass
 
-    # Peer baselines. A signal is only used as a warning, never as proof of misconduct.
     active = list(stats.values())
     cancel_rates = [Decimal(x["cancel_rows"]) / Decimal(x["sale_rows"]) for x in active if x["sale_rows"] > 0]
     writeoff_rates = [x["writeoff_units"] / Decimal(x["shifts"]) for x in active if x["shifts"] > 0]
@@ -126,35 +123,24 @@ async def _rows(days: int = 30):
         score = 0
         cancel_rate = Decimal(x["cancel_rows"]) / Decimal(x["sale_rows"]) if x["sale_rows"] else Decimal("0")
         writeoff_rate = x["writeoff_units"] / Decimal(x["shifts"]) if x["shifts"] else Decimal("0")
-
         if x["disc_count"] >= 2:
-            score += 35
-            reasons.append(f"{x['disc_count']} расхождений")
+            score += 35; reasons.append(f"{x['disc_count']} расхождений")
         elif x["disc_count"] == 1:
-            score += 15
-            reasons.append("есть расхождение")
+            score += 15; reasons.append("есть расхождение")
         if x["disc_amount"] >= Decimal("500"):
-            score += 20
-            reasons.append(f"расхождения на {x['disc_amount']:.0f} ₽")
+            score += 20; reasons.append(f"расхождения на {x['disc_amount']:.0f} ₽")
         if x["writeoffs"] >= 3:
-            score += 15
-            reasons.append(f"{x['writeoffs']} одобренных списания")
+            score += 15; reasons.append(f"{x['writeoffs']} одобренных списания")
         if x["shifts"] and x["writeoff_units"] > 0 and (median_writeoff == 0 and writeoff_rate >= 1 or median_writeoff > 0 and writeoff_rate >= median_writeoff * 2 and writeoff_rate >= 1):
-            score += 15
-            reasons.append("списания заметно выше медианы")
+            score += 15; reasons.append("списания заметно выше медианы")
         if x["sale_rows"] >= 20 and cancel_rate >= Decimal("0.05"):
-            score += 20
-            reasons.append(f"отмены продаж {cancel_rate * 100:.1f}%")
+            score += 20; reasons.append(f"отмены продаж {cancel_rate * 100:.1f}%")
         if x["sale_rows"] >= 20 and median_cancel > 0 and cancel_rate >= median_cancel * 2 and cancel_rate >= Decimal("0.03"):
-            score += 15
-            reasons.append("доля отмен выше медианы коллег")
+            score += 15; reasons.append("доля отмен выше медианы коллег")
         if x["manual_adjustments"] >= 2:
-            score += 10
-            reasons.append(f"{x['manual_adjustments']} ручных корректировки")
+            score += 10; reasons.append(f"{x['manual_adjustments']} ручных корректировки")
         if x["cash_diff"] != 0:
-            score += 10
-            reasons.append(f"разница по кассе {x['cash_diff']:.0f} ₽")
-
+            score += 10; reasons.append(f"разница по кассе {x['cash_diff']:.0f} ₽")
         x["cancel_rate"] = cancel_rate
         x["writeoff_rate"] = writeoff_rate
         x["score"] = min(score, 100)
@@ -163,61 +149,47 @@ async def _rows(days: int = 30):
 
 
 async def _risk_index_rows(days: int = 30):
-    """Composite integrity index using linked events, personal baselines and peer context.
-
-    This is an investigation-priority signal only. It never labels an employee as dishonest.
-    """
-    # Kept from the deployed implementation; detailed risk-index calculations live below.
     start, end = _period(days)
     async with SessionLocal() as session:
         employees = (await session.execute(select(Employee).where(Employee.active.is_(True)).order_by(Employee.full_name.asc()))).scalars().all()
         shifts = (await session.execute(select(Shift).where(Shift.employee_id.is_not(None), Shift.started_at >= start, Shift.started_at <= end))).scalars().all()
         writeoffs = (await session.execute(select(Writeoff, WriteoffItem).join(WriteoffItem, WriteoffItem.writeoff_id == Writeoff.id).where(Writeoff.employee_id.is_not(None), Writeoff.shift_id.is_not(None), Writeoff.created_at >= start, Writeoff.created_at <= end, Writeoff.status == WriteoffStatus.APPROVED.value))).all()
         discrepancies = (await session.execute(select(Discrepancy).where(Discrepancy.employee_id.is_not(None), Discrepancy.shift_id.is_not(None), Discrepancy.created_at >= start, Discrepancy.created_at <= end))).scalars().all()
-    by_shift = {}
-    for sh in shifts:
-        by_shift[int(sh.id)] = {"shift": sh, "sales_rows": 0, "cancel_rows": 0, "sales": Decimal("0"), "cancel_amount": Decimal("0"), "writeoff_units": Decimal("0"), "writeoffs": 0, "disc_amount": Decimal("0"), "discs": 0}
+    by_shift = {int(sh.id): {"shift": sh, "sales_rows": 0, "cancel_rows": 0, "sales": Decimal("0"), "cancel_amount": Decimal("0"), "writeoff_units": Decimal("0"), "writeoffs": 0, "disc_amount": Decimal("0"), "discs": 0} for sh in shifts}
     try:
         for row in await sales_rows(start, end):
             sid = row.get("working_shift_id")
-            if sid is None:
-                continue
+            if sid is None: continue
             match = next((x for x in by_shift.values() if int(x["shift"].langame_shift_id) == int(sid)), None)
-            if not match:
-                continue
+            if not match: continue
             qty = Decimal(str(row.get("count", 0) or 0)); amount = Decimal(str(row.get("price_sale", 0) or 0)) * qty
             match["sales_rows"] += 1
             if int(row.get("cancel", 0) or 0) == 1:
                 match["cancel_rows"] += 1; match["cancel_amount"] += amount
-            else:
-                match["sales"] += amount
+            else: match["sales"] += amount
     except Exception:
         pass
     for w, item in writeoffs:
         x = by_shift.get(int(w.shift_id))
-        if x:
-            x["writeoffs"] += 1; x["writeoff_units"] += Decimal(str(item.quantity or 0))
+        if x: x["writeoffs"] += 1; x["writeoff_units"] += Decimal(str(item.quantity or 0))
     for d in discrepancies:
         x = by_shift.get(int(d.shift_id))
-        if x:
-            x["discs"] += 1; x["disc_amount"] += abs(Decimal(str(d.amount_difference or 0)))
-    results = []
-    try:
-        baseline_rows = await sales_rows(start - timedelta(days=90), end)
-    except Exception:
-        baseline_rows = []
+        if x: x["discs"] += 1; x["disc_amount"] += abs(Decimal(str(d.amount_difference or 0)))
+    try: baseline_rows = await sales_rows(start - timedelta(days=90), end)
+    except Exception: baseline_rows = []
     sales_by_shift_baseline = {}
     for r in baseline_rows:
         sid = r.get("working_shift_id")
         if sid is None: continue
-        key = int(sid); total, cancels = sales_by_shift_baseline.get(key, (0, 0)); total += 1; cancels += int(r.get("cancel", 0) or 0); sales_by_shift_baseline[key] = (total, cancels)
+        key = int(sid); total, cancels = sales_by_shift_baseline.get(key, (0, 0)); sales_by_shift_baseline[key] = (total + 1, cancels + int(r.get("cancel", 0) or 0))
+    results = []
     async with SessionLocal() as session:
         for e in employees:
             emp_shifts = [x for x in shifts if x.employee_id == e.id]
             prior = (await session.execute(select(Shift).where(Shift.employee_id == e.id, Shift.status == "closed", Shift.started_at < start, Shift.started_at >= start - timedelta(days=90)).order_by(Shift.started_at.desc()).limit(30))).scalars().all()
             prior_metrics = []
             for ps in prior:
-                total, cancels = sales_by_shift_baseline.get(int(ps.langame_shift_id), (0, 0)); rate = Decimal(cancels) / Decimal(total) if total else Decimal("0"); prior_metrics.append(rate * 100)
+                total, cancels = sales_by_shift_baseline.get(int(ps.langame_shift_id), (0, 0)); prior_metrics.append((Decimal(cancels) / Decimal(total) * 100) if total else Decimal("0"))
             linked = []
             for x in emp_shifts:
                 m = by_shift.get(int(x.id))
@@ -231,8 +203,8 @@ async def _risk_index_rows(days: int = 30):
             score = 0; reasons = []; pattern_shifts = set()
             for sh, m, patterns in linked:
                 pattern_shifts.add(sh.id)
-                if len(patterns) >= 2: score += 20; reasons.append(f"смена #{sh.langame_shift_id}: {len(patterns)} связанных сигнала")
-                else: score += 8; reasons.append(f"смена #{sh.langame_shift_id}: {patterns[0]}")
+                score += 20 if len(patterns) >= 2 else 8
+                reasons.append(f"смена #{sh.langame_shift_id}: {len(patterns)} связанных сигнала" if len(patterns) >= 2 else f"смена #{sh.langame_shift_id}: {patterns[0]}")
             current_rates = []
             for x in emp_shifts:
                 m = by_shift.get(int(x.id))
@@ -247,22 +219,20 @@ async def _risk_index_rows(days: int = 30):
             if len(wo_shifts) >= 3: score += 10; reasons.append(f"списания в {len(wo_shifts)} сменах")
             cash_total = sum((abs(Decimal(str(x.cash_difference or 0))) for x in emp_shifts), Decimal("0"))
             if cash_total >= Decimal("500"): score += 10; reasons.append(f"суммарная разница по кассе {cash_total:.0f} ₽")
-            score = min(score, 100)
-            results.append({"employee": e, "score": score, "reasons": reasons[:5], "pattern_shifts": len(pattern_shifts), "linked_events": len(linked), "shifts": len(emp_shifts)})
+            results.append({"employee": e, "score": min(score, 100), "reasons": reasons[:5], "pattern_shifts": len(pattern_shifts), "linked_events": len(linked), "shifts": len(emp_shifts)})
     return sorted(results, key=lambda x: (x["score"], x["pattern_shifts"], x["linked_events"]), reverse=True)
 
 
 def _median(values):
     if not values: return Decimal("0")
-    values = sorted(values); n = len(values); mid = n // 2
-    return values[mid] if n % 2 else (values[mid - 1] + values[mid]) / Decimal("2")
+    values = sorted(values)
+    n = len(values); mid = n // 2
+    return values[mid] if n % 2 else (values[mid - 1] + values[mid]) / 2
 
 
 def _level(score: int) -> str:
-    if score >= 60:
-        return "🔴 Высокий риск"
-    if score >= 30:
-        return "🟡 Нужна проверка"
+    if score >= 60: return "🔴 Высокий риск"
+    if score >= 30: return "🟡 Нужна проверка"
     return "🟢 Низкий риск"
 
 
@@ -295,11 +265,7 @@ async def integrity_callback(call: CallbackQuery):
     if not await _is_owner(call.from_user.id if call.from_user else None):
         await call.answer("Нет доступа", show_alert=True)
         return
-    parts = call.data.split(":")
-    if len(parts) != 2 or parts[1] not in {"7", "30"}:
-        await call.answer("Неизвестный период", show_alert=True)
-        return
-    days = int(parts[1])
+    days = int(call.data.split(":", 1)[1])
     rows = await _rows(days)
     await call.message.edit_text(await integrity_text(days), reply_markup=_kb(days, [x for x in rows if x["score"] >= 30]))
     await call.answer()
