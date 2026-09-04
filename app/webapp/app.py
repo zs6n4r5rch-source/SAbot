@@ -24,8 +24,10 @@ from app.services.langame import langame_client, LangameAPIError
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
+EXPORT_DIR = BASE_DIR / "exports"
+EXPORT_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="Strike Arena Telegram Mini App", version="1.29.0")
+app = FastAPI(title="Strike Arena Telegram Mini App", version="1.30.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -43,20 +45,15 @@ def validate_init_data(init_data: str) -> dict:
     if not auth_date or abs(time.time() - auth_date) > 86400:
         raise HTTPException(401, "Expired Telegram initData")
     data_check_string = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
-    secret_key = hmac.new(
-        b"WebAppData", settings.telegram_bot_token.encode(), hashlib.sha256
-    ).digest()
-    calculated = hmac.new(
-        secret_key, data_check_string.encode(), hashlib.sha256
-    ).hexdigest()
+    secret_key = hmac.new(b"WebAppData", settings.telegram_bot_token.encode(), hashlib.sha256).digest()
+    calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(calculated, received_hash):
         raise HTTPException(401, "Invalid Telegram initData signature")
     return pairs
 
 
 async def current_user(request: Request):
-    init_data = request.headers.get("X-Telegram-Init-Data", "")
-    pairs = validate_init_data(init_data)
+    pairs = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""))
     try:
         raw_user = json.loads(pairs.get("user", "{}"))
     except json.JSONDecodeError:
@@ -65,11 +62,7 @@ async def current_user(request: Request):
     if not telegram_id:
         raise HTTPException(401, "Telegram user is missing")
     async with SessionLocal() as session:
-        user = (
-            await session.execute(
-                select(TelegramUser).where(TelegramUser.telegram_id == telegram_id)
-            )
-        ).scalar_one_or_none()
+        user = (await session.execute(select(TelegramUser).where(TelegramUser.telegram_id == telegram_id))).scalar_one_or_none()
         if not user or not user.active:
             raise HTTPException(403, "Access is not configured")
         return user, raw_user
@@ -95,23 +88,15 @@ async def index():
 
 @app.get("/healthz")
 async def healthz():
-    return {"ok": True, "service": "strike-arena-mini-app", "version": "1.29.0"}
+    return {"ok": True, "service": "strike-arena-mini-app", "version": "1.30.0"}
 
 
 @app.get("/api/me")
 async def me(request: Request):
     user, tg = await current_user(request)
     async with SessionLocal() as session:
-        employee = None
-        if user.employee_id:
-            employee = await session.get(Employee, user.employee_id)
-        return {
-            "telegram_id": user.telegram_id,
-            "role": user.role,
-            "display_name": employee.full_name if employee and employee.full_name else tg.get("first_name", "Пользователь"),
-            "username": tg.get("username"),
-            "employee_id": user.employee_id,
-        }
+        employee = await session.get(Employee, user.employee_id) if user.employee_id else None
+        return {"telegram_id": user.telegram_id, "role": user.role, "display_name": employee.full_name if employee and employee.full_name else tg.get("first_name", "Пользователь"), "username": tg.get("username"), "employee_id": user.employee_id}
 
 
 @app.get("/api/summary")
@@ -121,19 +106,8 @@ async def summary(request: Request):
         employees = await session.scalar(select(func.count(Employee.id)).where(Employee.active.is_(True)))
         open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None)))
         violations = await session.scalar(select(func.count(SalaryViolation.id)).where(SalaryViolation.created_at >= datetime.now(timezone.utc) - timedelta(days=30)))
-        critical = await session.scalar(
-            select(func.count(InventoryBalance.id)).where(
-                InventoryBalance.min_stock > 0,
-                InventoryBalance.quantity <= InventoryBalance.min_stock,
-            )
-        )
-        return {
-            "role": user.role,
-            "employees": employees or 0,
-            "open_shifts": open_shifts or 0,
-            "violations_30d": violations or 0,
-            "critical_stock": critical or 0,
-        }
+        critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock))
+        return {"role": user.role, "employees": employees or 0, "open_shifts": open_shifts or 0, "violations_30d": violations or 0, "critical_stock": critical or 0}
 
 
 @app.get("/api/dashboard")
@@ -146,14 +120,9 @@ async def dashboard(request: Request):
     sales, units, _ = await sales_totals(start, now)
     async with SessionLocal() as session:
         open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None)))
-        critical = await session.scalar(select(func.count(InventoryBalance.id)).where(
-            InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock
-        ))
-        pending = await session.scalar(select(func.count(SalaryViolation.id)).where(
-            SalaryViolation.dismissal_required.is_(True)
-        ))
-        return {"sales": dec(sales), "units": dec(units), "open_shifts": open_shifts or 0,
-                "critical_stock": critical or 0, "dismissal_required": pending or 0}
+        critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock))
+        pending = await session.scalar(select(func.count(SalaryViolation.id)).where(SalaryViolation.dismissal_required.is_(True)))
+        return {"sales": dec(sales), "units": dec(units), "open_shifts": open_shifts or 0, "critical_stock": critical or 0, "dismissal_required": pending or 0}
 
 
 @app.get("/api/admins")
@@ -161,18 +130,8 @@ async def admins(request: Request):
     user, _ = await current_user(request)
     owner_required(user)
     async with SessionLocal() as session:
-        rows = (await session.execute(
-            select(Employee, TelegramUser)
-            .outerjoin(TelegramUser, TelegramUser.employee_id == Employee.id)
-            .where(Employee.active.is_(True))
-            .order_by(Employee.full_name)
-        )).all()
-        return {"items": [{
-            "id": e.id, "name": e.full_name or f"Сотрудник #{e.id}",
-            "phone": e.phone, "telegram_id": tu.telegram_id if tu else None,
-            "role": tu.role if tu else "not_linked", "access_active": bool(tu and tu.active),
-            "langame_user_id": e.langame_user_id
-        } for e, tu in rows]}
+        rows = (await session.execute(select(Employee, TelegramUser).outerjoin(TelegramUser, TelegramUser.employee_id == Employee.id).where(Employee.active.is_(True)).order_by(Employee.full_name))).all()
+        return {"items": [{"id": e.id, "name": e.full_name or f"Сотрудник #{e.id}", "phone": e.phone, "telegram_id": tu.telegram_id if tu else None, "role": tu.role if tu else "not_linked", "access_active": bool(tu and tu.active), "langame_user_id": e.langame_user_id} for e, tu in rows]}
 
 
 @app.get("/api/clients")
@@ -184,16 +143,12 @@ async def clients(request: Request, q: str = "", limit: int = 30):
         data = await langame_client.guests_search(query=q or None, size=min(max(limit, 1), 100))
         return {"source": "langame", "data": data}
     except LangameAPIError as exc:
-        # Fallback to locally synchronized guests.
         async with SessionLocal() as session:
             stmt = select(Guest).order_by(desc(Guest.updated_at)).limit(min(max(limit, 1), 100))
             if q:
                 stmt = stmt.where((Guest.fio.ilike(f"%{q}%")) | (Guest.phone.ilike(f"%{q}%")))
             rows = (await session.execute(stmt)).scalars().all()
-            return {"source": "local_fallback", "error": str(exc), "items": [
-                {"id": g.id, "langame_guest_id": g.langame_guest_id, "fio": g.fio, "phone": g.phone}
-                for g in rows
-            ]}
+            return {"source": "local_fallback", "error": str(exc), "items": [{"id": g.id, "langame_guest_id": g.langame_guest_id, "fio": g.fio, "phone": g.phone} for g in rows]}
 
 
 @app.get("/api/inventory")
@@ -202,19 +157,8 @@ async def inventory(request: Request):
     if user.role not in (UserRole.OWNER.value, UserRole.ADMIN.value):
         raise HTTPException(403, "Access denied")
     async with SessionLocal() as session:
-        rows = (await session.execute(
-            select(InventoryBalance, Product, Club)
-            .join(Product, Product.id == InventoryBalance.product_id)
-            .join(Club, Club.id == InventoryBalance.club_id)
-            .order_by(InventoryBalance.quantity.asc())
-            .limit(100)
-        )).all()
-        return {"items": [{
-            "id": b.id, "club": c.name, "product": p.name,
-            "quantity": dec(b.quantity), "min_stock": dec(b.min_stock),
-            "critical": bool(b.min_stock > 0 and b.quantity <= b.min_stock),
-            "updated_at": iso(b.updated_at)
-        } for b, p, c in rows]}
+        rows = (await session.execute(select(InventoryBalance, Product, Club).join(Product, Product.id == InventoryBalance.product_id).join(Club, Club.id == InventoryBalance.club_id).order_by(InventoryBalance.quantity.asc()).limit(100))).all()
+        return {"items": [{"id": b.id, "club": c.name, "product": p.name, "quantity": dec(b.quantity), "min_stock": dec(b.min_stock), "critical": bool(b.min_stock > 0 and b.quantity <= b.min_stock), "updated_at": iso(b.updated_at)} for b, p, c in rows]}
 
 
 @app.get("/api/finance")
@@ -222,20 +166,13 @@ async def finance(request: Request, days: int = 30):
     user, _ = await current_user(request)
     owner_required(user)
     days = min(max(days, 1), 90)
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days)
+    end = datetime.now(timezone.utc); start = end - timedelta(days=days)
     from app.bot.analytics import sales_totals
     sales, units, _ = await sales_totals(start, end)
     async with SessionLocal() as session:
-        salaries = await session.scalar(select(func.coalesce(func.sum(SalaryPeriod.total_amount), 0)).where(
-            SalaryPeriod.date_from >= start.date(), SalaryPeriod.date_to <= end.date()
-        ))
-        penalties = await session.scalar(select(func.coalesce(func.sum(SalaryViolation.amount), 0)).where(
-            SalaryViolation.created_at >= start, SalaryViolation.created_at <= end
-        ))
-        return {"days": days, "sales": dec(sales), "units": dec(units),
-                "salary": dec(salaries), "penalties": dec(penalties),
-                "net_before_other": dec(sales) - dec(salaries) - dec(penalties)}
+        salaries = await session.scalar(select(func.coalesce(func.sum(SalaryPeriod.total_amount), 0)).where(SalaryPeriod.date_from >= start.date(), SalaryPeriod.date_to <= end.date()))
+        penalties = await session.scalar(select(func.coalesce(func.sum(SalaryViolation.amount), 0)).where(SalaryViolation.created_at >= start, SalaryViolation.created_at <= end))
+        return {"days": days, "sales": dec(sales), "units": dec(units), "salary": dec(salaries), "penalties": dec(penalties), "net_before_other": dec(sales) - dec(salaries) - dec(penalties)}
 
 
 @app.get("/api/analytics")
@@ -243,144 +180,146 @@ async def analytics(request: Request, days: int = 30):
     user, _ = await current_user(request)
     owner_required(user)
     days = min(max(days, 1), 90)
+    end = datetime.now(timezone.utc); start = end - timedelta(days=days)
+    from app.bot.analytics import sales_rows, admins_ranking
+    rows = await sales_rows(start, end); ranking = await admins_ranking(days)
+    return {"days": days, "sales_rows": rows, "ranking": ranking}
+
+
+@app.get("/api/statistics")
+async def statistics(request: Request, days: int | None = 30):
+    """Unified statistics endpoint. days=None means all available local history."""
+    user, _ = await current_user(request); owner_required(user)
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days)
+    if days is None or days <= 0:
+        start = datetime(2000, 1, 1, tzinfo=timezone.utc); period = "all"
+    else:
+        days = min(max(days, 1), 3650); start = end - timedelta(days=days); period = str(days)
     from app.bot.analytics import sales_rows, admins_ranking
     rows = await sales_rows(start, end)
-    ranking = await admins_ranking(days)
-    return {"days": days, "sales_rows": rows, "ranking": ranking}
+    ranking = await admins_ranking(None if period == "all" else int(period))
+    sales = units = 0.0
+    for r in rows:
+        if Number(r.get("cancel", 0)) == 1: continue
+        sales += Number(r.get("count", r.get("quantity", 0))) * Number(r.get("price_sale", r.get("price", 0)))
+        units += Number(r.get("count", r.get("quantity", 0)))
+    async with SessionLocal() as session:
+        shifts_q = select(Shift, Employee).outerjoin(Employee, Employee.id == Shift.employee_id).where(Shift.started_at >= start).order_by(Shift.started_at.desc())
+        shifts = (await session.execute(shifts_q)).all()
+        violations = (await session.execute(select(SalaryViolation, Employee).join(Employee, Employee.id == SalaryViolation.employee_id).where(SalaryViolation.created_at >= start).order_by(SalaryViolation.created_at.desc()))).all()
+        bonuses = (await session.execute(select(NonMonetaryBonus, Employee).join(Employee, Employee.id == NonMonetaryBonus.employee_id).where(NonMonetaryBonus.created_at >= start).order_by(NonMonetaryBonus.created_at.desc()))).all()
+        salaries = (await session.execute(select(SalaryPeriod, Employee).join(Employee, Employee.id == SalaryPeriod.employee_id).where(SalaryPeriod.date_to >= start.date()).order_by(SalaryPeriod.date_to.desc()))).all()
+        inventory_rows = (await session.execute(select(InventoryBalance, Product, Club).join(Product, Product.id == InventoryBalance.product_id).join(Club, Club.id == InventoryBalance.club_id))).all()
+    return {
+        "period": period, "from": iso(start), "to": iso(end), "sales": sales, "units": units,
+        "admin_ranking": ranking,
+        "shifts": [{"id": s.id, "employee": e.full_name if e else str(s.employee_id), "started_at": iso(s.started_at), "ended_at": iso(s.ended_at), "status": "open" if s.ended_at is None else "closed"} for s,e in shifts],
+        "violations": [{"id": v.id, "employee": e.full_name, "rule": v.rule_code, "title": v.title, "amount": dec(v.amount), "premium_reduction_percent": dec(v.premium_reduction_percent), "dismissal_required": v.dismissal_required, "created_at": iso(v.created_at)} for v,e in violations],
+        "bonuses": [{"id": b.id, "employee": e.full_name, "title": b.title, "type": b.bonus_type, "comment": b.comment, "created_at": iso(b.created_at)} for b,e in bonuses],
+        "salaries": [{"id": p.id, "employee": e.full_name, "from": p.date_from.isoformat(), "to": p.date_to.isoformat(), "base": dec(p.base_amount), "bonus": dec(p.bonus_amount), "total": dec(p.total_amount), "status": p.status} for p,e in salaries],
+        "inventory": [{"id": b.id, "club": c.name, "product": p.name, "quantity": dec(b.quantity), "min_stock": dec(b.min_stock), "critical": bool(b.min_stock > 0 and b.quantity <= b.min_stock), "updated_at": iso(b.updated_at)} for b,p,c in inventory_rows],
+    }
+
+
+@app.get("/api/statistics/export")
+async def statistics_export(request: Request, days: int | None = 30):
+    user, _ = await current_user(request); owner_required(user)
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    data = await statistics(request, days)
+    wb = Workbook(); wb.remove(wb.active)
+    def sheet(name, headers, rows):
+        ws = wb.create_sheet(name); ws.append(headers)
+        for row in rows: ws.append([row.get(h, "") for h in headers])
+        for col in range(1, ws.max_column + 1):
+            width = min(max(len(str(ws.cell(r,col).value or "")) for r in range(1, min(ws.max_row, 100)+1)) + 2, 45)
+            ws.column_dimensions[get_column_letter(col)].width = width
+        ws.freeze_panes = "A2"; ws.auto_filter.ref = ws.dimensions
+    sheet("Сводка", ["Показатель","Значение"], [
+        {"Показатель":"Период","Значение":("Все время" if data["period"] == "all" else f"{data['period']} дней")},
+        {"Показатель":"Продажи","Значение":data["sales"]}, {"Показатель":"Продано единиц","Значение":data["units"]},
+    ])
+    sheet("Администраторы", ["name","hours","sales","sales_per_hour"], data["admin_ranking"])
+    sheet("Смены", ["id","employee","started_at","ended_at","status"], data["shifts"])
+    sheet("Штрафы", ["id","employee","rule","title","amount","premium_reduction_percent","dismissal_required","created_at"], data["violations"])
+    sheet("Бонусы", ["id","employee","title","type","comment","created_at"], data["bonuses"])
+    sheet("Зарплата", ["id","employee","from","to","base","bonus","total","status"], data["salaries"])
+    sheet("Остатки", ["id","club","product","quantity","min_stock","critical","updated_at"], data["inventory"])
+    path = EXPORT_DIR / f"strike_arena_statistics_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.xlsx"
+    wb.save(path)
+    return FileResponse(path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=path.name)
 
 
 @app.get("/api/penalties")
 async def penalties(request: Request, limit: int = 50):
-    user, _ = await current_user(request)
-    owner_required(user)
+    user, _ = await current_user(request); owner_required(user)
     async with SessionLocal() as session:
-        rows = (await session.execute(
-            select(SalaryViolation, Employee)
-            .join(Employee, Employee.id == SalaryViolation.employee_id)
-            .order_by(SalaryViolation.created_at.desc())
-            .limit(min(max(limit, 1), 100))
-        )).all()
-        return {"items": [{
-            "id": v.id, "employee_id": e.id, "employee": e.full_name or str(e.id),
-            "rule": v.rule_code, "title": v.title, "amount": dec(v.amount),
-            "premium_reduction_percent": dec(v.premium_reduction_percent),
-            "dismissal_required": v.dismissal_required, "comment": v.comment,
-            "created_at": iso(v.created_at)
-        } for v, e in rows]}
+        rows = (await session.execute(select(SalaryViolation, Employee).join(Employee, Employee.id == SalaryViolation.employee_id).order_by(SalaryViolation.created_at.desc()).limit(min(max(limit, 1), 100)))).all()
+        return {"items": [{"id": v.id, "employee_id": e.id, "employee": e.full_name or str(e.id), "rule": v.rule_code, "title": v.title, "amount": dec(v.amount), "premium_reduction_percent": dec(v.premium_reduction_percent), "dismissal_required": v.dismissal_required, "comment": v.comment, "created_at": iso(v.created_at)} for v,e in rows]}
 
 
 @app.get("/api/bonuses")
 async def bonuses(request: Request, limit: int = 50):
     user, _ = await current_user(request)
     async with SessionLocal() as session:
-        stmt = select(NonMonetaryBonus, Employee).join(
-            Employee, Employee.id == NonMonetaryBonus.employee_id
-        ).order_by(NonMonetaryBonus.created_at.desc()).limit(min(max(limit, 1), 100))
+        stmt = select(NonMonetaryBonus, Employee).join(Employee, Employee.id == NonMonetaryBonus.employee_id).order_by(NonMonetaryBonus.created_at.desc()).limit(min(max(limit, 1), 100))
         if user.role == UserRole.ADMIN.value:
-            if not user.employee_id:
-                return {"items": []}
+            if not user.employee_id: return {"items": []}
             stmt = stmt.where(NonMonetaryBonus.employee_id == user.employee_id)
-        elif user.role != UserRole.OWNER.value:
-            raise HTTPException(403, "Access denied")
+        elif user.role != UserRole.OWNER.value: raise HTTPException(403, "Access denied")
         rows = (await session.execute(stmt)).all()
-        return {"items": [{
-            "id": b.id, "employee": e.full_name or str(e.id), "title": b.title,
-            "type": b.bonus_type, "comment": b.comment, "created_at": iso(b.created_at)
-        } for b, e in rows]}
+        return {"items": [{"id": b.id, "employee": e.full_name, "title": b.title, "type": b.bonus_type, "comment": b.comment, "created_at": iso(b.created_at)} for b,e in rows]}
 
 
 @app.get("/api/my-stats")
 async def my_stats(request: Request):
     user, _ = await current_user(request)
-    if user.role != UserRole.ADMIN.value or not user.employee_id:
-        raise HTTPException(403, "ADMIN access required")
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=30)
+    if user.role != UserRole.ADMIN.value or not user.employee_id: raise HTTPException(403, "ADMIN access required")
+    end = datetime.now(timezone.utc); start = end - timedelta(days=30)
     async with SessionLocal() as session:
-        shifts = await session.scalar(select(func.count(Shift.id)).where(
-            Shift.employee_id == user.employee_id, Shift.started_at >= start
-        ))
-        open_shift = await session.scalar(select(func.count(Shift.id)).where(
-            Shift.employee_id == user.employee_id, Shift.ended_at.is_(None)
-        ))
-        violations = await session.scalar(select(func.coalesce(func.sum(SalaryViolation.amount), 0)).where(
-            SalaryViolation.employee_id == user.employee_id, SalaryViolation.created_at >= start
-        ))
+        shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.employee_id == user.employee_id, Shift.started_at >= start))
+        open_shift = await session.scalar(select(func.count(Shift.id)).where(Shift.employee_id == user.employee_id, Shift.ended_at.is_(None)))
+        violations = await session.scalar(select(func.coalesce(func.sum(SalaryViolation.amount), 0)).where(SalaryViolation.employee_id == user.employee_id, SalaryViolation.created_at >= start))
         return {"shifts_30d": shifts or 0, "open_shift": open_shift or 0, "penalties": dec(violations)}
 
 
 @app.get("/api/my-salary")
 async def my_salary(request: Request):
     user, _ = await current_user(request)
-    if user.role != UserRole.ADMIN.value or not user.employee_id:
-        raise HTTPException(403, "ADMIN access required")
+    if user.role != UserRole.ADMIN.value or not user.employee_id: raise HTTPException(403, "ADMIN access required")
     async with SessionLocal() as session:
-        periods = (await session.execute(
-            select(SalaryPeriod).where(SalaryPeriod.employee_id == user.employee_id)
-            .order_by(SalaryPeriod.date_to.desc()).limit(20)
-        )).scalars().all()
-        return {"items": [{
-            "id": p.id, "from": p.date_from.isoformat(), "to": p.date_to.isoformat(),
-            "base": dec(p.base_amount), "bonus": dec(p.bonus_amount),
-            "total": dec(p.total_amount), "status": p.status
-        } for p in periods]}
+        periods = (await session.execute(select(SalaryPeriod).where(SalaryPeriod.employee_id == user.employee_id).order_by(SalaryPeriod.date_to.desc()).limit(20))).scalars().all()
+        return {"items": [{"id": p.id, "from": p.date_from.isoformat(), "to": p.date_to.isoformat(), "base": dec(p.base_amount), "bonus": dec(p.bonus_amount), "total": dec(p.total_amount), "status": p.status} for p in periods]}
 
 
 @app.get("/api/shifts")
 async def shifts(request: Request, days: int = 30):
     user, _ = await current_user(request)
-    if user.role not in (UserRole.OWNER.value, UserRole.ADMIN.value):
-        raise HTTPException(403, "Access denied")
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=min(max(days, 1), 90))
+    if user.role not in (UserRole.OWNER.value, UserRole.ADMIN.value): raise HTTPException(403, "Access denied")
+    end = datetime.now(timezone.utc); start = end - timedelta(days=min(max(days, 1), 90))
     async with SessionLocal() as session:
-        stmt = select(Shift, Employee).outerjoin(Employee, Employee.id == Shift.employee_id).where(
-            Shift.started_at >= start
-        ).order_by(Shift.started_at.desc()).limit(100)
-        if user.role == UserRole.ADMIN.value and user.employee_id:
-            stmt = stmt.where(Shift.employee_id == user.employee_id)
+        stmt = select(Shift, Employee).outerjoin(Employee, Employee.id == Shift.employee_id).where(Shift.started_at >= start).order_by(Shift.started_at.desc()).limit(100)
+        if user.role == UserRole.ADMIN.value and user.employee_id: stmt = stmt.where(Shift.employee_id == user.employee_id)
         rows = (await session.execute(stmt)).all()
-        return {"items": [{
-            "id": s.id, "employee": e.full_name if e else str(s.employee_id),
-            "started_at": iso(s.started_at), "ended_at": iso(s.ended_at),
-            "status": "open" if s.ended_at is None else "closed"
-        } for s, e in rows]}
+        return {"items": [{"id": s.id, "employee": e.full_name if e else str(s.employee_id), "started_at": iso(s.started_at), "ended_at": iso(s.ended_at), "status": "open" if s.ended_at is None else "closed"} for s,e in rows]}
 
 
 @app.get("/api/attention")
 async def attention(request: Request):
-    user, _ = await current_user(request)
-    owner_required(user)
+    user, _ = await current_user(request); owner_required(user)
     async with SessionLocal() as session:
-        critical = await session.scalar(select(func.count(InventoryBalance.id)).where(
-            InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock
-        ))
-        pending_dismissals = await session.scalar(select(func.count(SalaryViolation.id)).where(
-            SalaryViolation.dismissal_required.is_(True)
-        ))
+        critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock))
+        pending_dismissals = await session.scalar(select(func.count(SalaryViolation.id)).where(SalaryViolation.dismissal_required.is_(True)))
         return {"critical_stock": critical or 0, "dismissal_required": pending_dismissals or 0}
 
 
 @app.get("/api/settings")
 async def owner_settings(request: Request):
-    user, _ = await current_user(request)
-    owner_required(user)
+    user, _ = await current_user(request); owner_required(user)
     async with SessionLocal() as session:
-        cfg = await session.scalar(select(OwnerReportSettings).where(
-            OwnerReportSettings.owner_telegram_id == user.telegram_id
-        ))
-        if not cfg:
-            return {"configured": False}
-        return {
-            "configured": True, "enabled": cfg.enabled, "timezone": cfg.report_timezone,
-            "hour": cfg.report_hour, "minute": cfg.report_minute,
-            "include_sales": cfg.include_sales, "include_shifts": cfg.include_shifts,
-            "include_inventory": cfg.include_inventory, "include_discrepancies": cfg.include_discrepancies,
-            "include_salary": cfg.include_salary, "include_clients": cfg.include_clients,
-            "send_excel": cfg.send_excel
-        }
+        cfg = await session.scalar(select(OwnerReportSettings).where(OwnerReportSettings.owner_telegram_id == user.telegram_id))
+        if not cfg: return {"configured": False}
+        return {"configured": True, "enabled": cfg.enabled, "timezone": cfg.report_timezone, "hour": cfg.report_hour, "minute": cfg.report_minute, "include_sales": cfg.include_sales, "include_shifts": cfg.include_shifts, "include_inventory": cfg.include_inventory, "include_discrepancies": cfg.include_discrepancies, "include_salary": cfg.include_salary, "include_clients": cfg.include_clients, "send_excel": cfg.send_excel}
 
 
 class PenaltyRequest(BaseModel):
@@ -391,39 +330,29 @@ class PenaltyRequest(BaseModel):
 
 @app.post("/api/penalties")
 async def create_penalty(request: Request, payload: PenaltyRequest):
-    user, _ = await current_user(request)
-    owner_required(user)
+    user, _ = await current_user(request); owner_required(user)
     from app.bot.penalties import RULE_MAP, create_manual_penalty
-    if payload.code not in RULE_MAP:
-        raise HTTPException(400, "Unknown penalty rule")
-    try:
-        await create_manual_penalty(user.telegram_id, payload.employee_id, payload.code, payload.comment)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
+    if payload.code not in RULE_MAP: raise HTTPException(400, "Unknown penalty rule")
+    try: await create_manual_penalty(user.telegram_id, payload.employee_id, payload.code, payload.comment)
+    except ValueError as exc: raise HTTPException(400, str(exc))
     return {"ok": True}
 
 
 @app.get("/api/penalty-rules")
 async def penalty_rules(request: Request):
-    user, _ = await current_user(request)
-    owner_required(user)
+    user, _ = await current_user(request); owner_required(user)
     from app.bot.penalties import RULE_MAP
-    return {"items": [{
-        "code": code, "title": data[1], "amount": dec(data[2]),
-        "repeat": bool(data[3]), "premium": bool(data[4])
-    } for code, data in RULE_MAP.items()]}
+    return {"items": [{"code": code, "title": data[1], "amount": dec(data[2]), "repeat": bool(data[3]), "premium": bool(data[4])} for code,data in RULE_MAP.items()]}
 
 
 @app.get("/api/audit")
 async def audit(request: Request, limit: int = 100):
-    user, _ = await current_user(request)
-    owner_required(user)
+    user, _ = await current_user(request); owner_required(user)
     async with SessionLocal() as session:
-        rows = (await session.execute(
-            select(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(max(limit, 1), 200))
-        )).scalars().all()
-        return {"items": [{
-            "id": x.id, "action": x.action, "entity_type": x.entity_type,
-            "entity_id": x.entity_id, "created_at": iso(x.created_at),
-            "payload": x.payload
-        } for x in rows]}
+        rows = (await session.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(max(limit, 1), 200)))).scalars().all()
+        return {"items": [{"id": x.id, "action": x.action, "entity_type": x.entity_type, "entity_id": x.entity_id, "created_at": iso(x.created_at), "payload": x.payload} for x in rows]}
+
+
+def Number(v):
+    try: return float(v or 0)
+    except (TypeError, ValueError): return 0.0
