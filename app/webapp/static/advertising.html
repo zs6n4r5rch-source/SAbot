@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Strike Arena — Реклама</title>
+<style>
+:root{--bg:#0b0a12;--card:#151321;--text:#f7f5ff;--muted:#aaa5bd;--accent:#9b7cff;--good:#54d6a0;--warn:#ffc857;--line:#28243a}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0b0a12,#11101a);color:var(--text);font:15px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:18px 14px calc(30px + env(safe-area-inset-bottom))}.wrap{max-width:720px;margin:auto}h1{font-size:25px;margin:5px 0 4px}.sub{color:var(--muted);margin-bottom:16px}.tabs{display:flex;gap:8px;margin:12px 0;overflow:auto}.tabs button{border:1px solid var(--line);background:var(--card);color:var(--text);padding:9px 13px;border-radius:12px;white-space:nowrap}.tabs button.active{border-color:var(--accent);background:#211a36}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0}.kpi{font-size:22px;font-weight:700}.label{color:var(--muted);font-size:12px;margin-top:4px}.rec{border-left:3px solid var(--accent);padding:12px;margin:10px 0;background:#12101b;border-radius:10px}.rec.good{border-color:var(--good)}.rec.warn{border-color:var(--warn)}.title{font-weight:700;margin-bottom:5px}.small{font-size:13px;color:var(--muted);line-height:1.45}.pill{display:inline-block;padding:4px 8px;border-radius:9px;background:#211d2d;color:#d8d0ff;font-size:12px;margin:3px 3px 0 0}.error{color:#ff9b9b}.cta{width:100%;border:0;background:var(--accent);color:white;padding:13px;border-radius:12px;font-weight:700;margin-top:8px}a{color:#c9baff}.empty{color:var(--muted);padding:15px 0}.source{font-size:11px;color:#777286;margin-top:12px}
+</style></head>
+<body><div class="wrap">
+<h1>Реклама и продвижение</h1><div class="sub">Рекомендации формируются из фактической статистики Strike Arena. Это помощник для решения, а не автоматический запуск рекламы.</div>
+<div class="tabs"><button class="active" data-days="30">30 дней</button><button data-days="90">90 дней</button><button data-days="365">365 дней</button></div>
+<div id="kpis" class="grid"></div>
+<div class="card"><div class="title">Что рекламировать</div><div id="recs"><div class="empty">Загружаю статистику…</div></div></div>
+<div class="card"><div class="title">План рекламной кампании</div><div id="plan"></div></div>
+<div class="card"><div class="title">Контроль эффективности</div><div class="small">Для оценки рекламы лучше вести отдельные ссылки/промокоды по каналам. Тогда можно сопоставить переходы и новые регистрации/визиты с данными Langame и считать стоимость привлечения и окупаемость.</div><div class="pill">Охват</div><div class="pill">Регистрации</div><div class="pill">Первый визит</div><div class="pill">Повторный визит</div><div class="pill">Выручка</div><div class="pill">CPA / CAC</div><div class="pill">ROAS</div></div>
+<div class="source">Данные: текущая статистика бота. Рекомендации не подменяют фактическую статистику рекламных кабинетов.</div>
+</div>
+<script>
+const $=s=>document.querySelector(s);const tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();
+async function api(url){const r=await fetch(url,{headers:{'X-Telegram-Init-Data':tg?.initData||''}});if(!r.ok)throw new Error(await r.text());return r.json()}
+function money(v){return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(Number(v||0))+' ₽'}
+function render(d,days){
+ const sales=Number(d.sales||0),units=Number(d.units||0),admins=d.admin_ranking||[],vis=d.violations||[],inv=d.inventory||[];
+ const avg=units?sales/units:0;const critical=inv.filter(x=>x.critical).length;const hours=admins.reduce((s,x)=>s+Number(x.hours||0),0);
+ $('#kpis').innerHTML=`<div class="card"><div class="kpi">${money(sales)}</div><div class="label">продажи за ${days} дней</div></div><div class="card"><div class="kpi">${units.toLocaleString('ru-RU')}</div><div class="label">проданных единиц</div></div><div class="card"><div class="kpi">${money(avg)}</div><div class="label">средняя продажа</div></div><div class="card"><div class="kpi">${hours.toFixed(1)}</div><div class="label">часы смен</div></div>`;
+ const out=[];
+ if(sales<=0)out.push(['warn','Сначала собрать базу','Продажи за выбранный период равны нулю. Не увеличивай рекламный бюджет, пока не появится измеримая конверсия.']);
+ else if(units>0)out.push(['good','Продвигать самый понятный оффер','Используй рекламу для конкретного продукта/пакета с понятной ценой и призывом к действию. Базовый ориентир бюджета лучше привязать к фактической выручке и проверять окупаемость тестом.']);
+ if(critical>0)out.push(['warn','Не рекламировать дефицит','Есть критические остатки по '+critical+' позициям. Не направляй рекламу на товар/услугу, которые могут закончиться.']);
+ if(vis.length>0)out.push(['','Учитывать качество сервиса','За период есть '+vis.length+' штрафных событий. Перед масштабированием рекламы проверь, что рост трафика не ухудшит обслуживание и удержание гостей.']);
+ out.push(['','Запускать A/B тест','Сделай 2–3 варианта объявления с одной целью и одинаковым окном измерения. Оставляй вариант, который приводит не просто клики, а регистрации и реальные визиты.']);
+ $('#recs').innerHTML=out.map(x=>`<div class="rec ${x[0]}"><div class="title">${x[1]}</div><div class="small">${x[2]}</div></div>`).join('');
+ $('#plan').innerHTML=`<div class="rec"><div class="title">1. Оффер</div><div class="small">Сформулировать одно измеримое предложение для новой аудитории.</div></div><div class="rec"><div class="title">2. Каналы</div><div class="small">Разделить Telegram, VK и другие каналы отдельными ссылками/промокодами.</div></div><div class="rec"><div class="title">3. Тест</div><div class="small">Запустить небольшой тестовый бюджет и сравнить стоимость регистрации и первого визита.</div></div><div class="rec"><div class="title">4. Масштабирование</div><div class="small">Увеличивать бюджет только после подтверждения окупаемости и качества привлечённых гостей.</div></div>`;
+}
+async function load(days){$('#recs').innerHTML='<div class="empty">Загружаю статистику…</div>';try{const d=await api('/api/statistics?days='+days);render(d,days)}catch(e){$('#recs').innerHTML='<div class="error">Не удалось получить статистику. Открой раздел из Telegram после авторизации.</div>'}}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');load(b.dataset.days)});load(30);
+</script></body></html>
