@@ -1,0 +1,72 @@
+name: Apply penalty callback auth fix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-penalty-callback-auth-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Patch callback authorization
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/bot/penalties.py')
+          text = path.read_text(encoding='utf-8')
+
+          if 'owner_only(callback.message)' not in text:
+              raise SystemExit('Expected callback authorization pattern was not found')
+
+          text = text.replace(
+              'from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message',
+              'from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, User',
+          )
+
+          old = '''async def owner_only(message: Message):
+              user = await get_access(message)
+              if user is None or user.role != UserRole.OWNER.value:
+                  await message.answer("⛔ Только владелец.")
+                  return None
+              return user
+          '''
+          new = '''async def owner_only(message: Message | User):
+              if isinstance(message, User):
+                  async with SessionLocal() as session:
+                      user = await session.scalar(
+                          select(TelegramUser).where(TelegramUser.telegram_id == message.id)
+                      )
+              else:
+                  user = await get_access(message)
+              if user is None or not user.active or user.role != UserRole.OWNER.value:
+                  if isinstance(message, Message):
+                      await message.answer("⛔ Только владелец.")
+                  return None
+              return user
+          '''
+          if old not in text:
+              raise SystemExit('owner_only function body did not match expected source')
+          text = text.replace(old, new, 1)
+          text = text.replace('owner_only(callback.message)', 'owner_only(callback.from_user)')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify
+        run: python -m compileall -q app
+
+      - name: Commit and push
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/bot/penalties.py
+          git diff --cached --quiet && { echo 'No changes to commit'; exit 1; }
+          git commit -m 'Fix owner authorization for penalty callbacks'
+          git push
