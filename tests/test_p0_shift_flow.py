@@ -24,7 +24,9 @@ def test_p0_models_are_exported_from_isolated_module():
     root = Path(__file__).parents[1]
     init = (root / "app" / "models" / "__init__.py").read_text(encoding="utf-8")
     salary = (root / "app" / "models" / "salary.py").read_text(encoding="utf-8")
-    assert "from app.models.salary import" in init
+    assert "_SALARY_EXPORTS" in init
+    assert "def __getattr__(name):" in init
+    assert "from app.models import salary" in init
     for name in ["ShiftCloseReport", "ShiftCloseStockItem", "SalaryPeriod", "SalaryViolation", "SalaryPayment", "NonMonetaryBonus"]:
         assert f"class {name}" in salary
 
@@ -43,7 +45,6 @@ def test_p0_financial_and_result_routes_are_registered_and_fresh():
     assert "shiftResult()" in routes
     assert "Посмотреть результат и зарплату" in routes
     assert "salary.total" in routes
-    # Bonus, salary and result must refresh the local shift snapshot from LANGAME.
     assert routes.count("await sync_shifts_data()") >= 3
     assert "math.isfinite(payload.amount)" in routes
 
