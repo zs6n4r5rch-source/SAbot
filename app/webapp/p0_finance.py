@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import math
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field
@@ -30,10 +31,13 @@ def _admin(user):
 async def create_financial_bonus(request: Request, payload: BonusPayload):
     user, _ = await current_user(request)
     _owner(user)
+    if not math.isfinite(payload.amount):
+        raise HTTPException(400, "Сумма премии должна быть конечным числом")
     amount = Decimal(str(payload.amount)).quantize(Decimal("0.01"))
     if amount <= 0:
         raise HTTPException(400, "Сумма премии должна быть больше нуля")
-    from app.bot.salary import calculate_period, SHIFT_PAY
+    from app.bot.salary import calculate_period, SHIFT_PAY, sync_shifts_data
+    await sync_shifts_data()
     today = datetime.now(timezone.utc).date()
     date_from = today.replace(day=1)
     async with SessionLocal() as session:
@@ -67,7 +71,8 @@ async def create_financial_bonus(request: Request, payload: BonusPayload):
 async def my_salary_current(request: Request):
     user, _ = await current_user(request)
     _admin(user)
-    from app.bot.salary import calculate_period, SHIFT_PAY
+    from app.bot.salary import calculate_period, SHIFT_PAY, sync_shifts_data
+    await sync_shifts_data()
     today = datetime.now(timezone.utc).date()
     async with SessionLocal() as session:
         period = await calculate_period(user.employee_id, today.replace(day=1), today, SHIFT_PAY, session)
