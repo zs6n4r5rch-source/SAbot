@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0021_inventory_min_stock_default_five"
+revision = "0021_inventory_min_stock_five"
 down_revision = "0020_smm_role_and_work_accounting"
 branch_labels = None
 depends_on = None
