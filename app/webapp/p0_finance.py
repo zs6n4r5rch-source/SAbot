@@ -28,6 +28,10 @@ def _admin(user):
         raise HTTPException(403, "ADMIN access required")
 
 
+def _period_for_date(value):
+    return value.replace(day=1), (value.replace(day=1).replace(day=28) + __import__('datetime').timedelta(days=4)).replace(day=1) - __import__('datetime').timedelta(days=1)
+
+
 @app.post("/api/bonuses")
 async def create_financial_bonus(request: Request, payload: BonusPayload):
     user, _ = await current_user(request)
@@ -109,8 +113,9 @@ async def my_shift_result(request: Request):
                 SalaryViolation.shift_id == shift.id,
             ).order_by(SalaryViolation.created_at.desc())
         )).scalars().all()
-        today = datetime.now(timezone.utc).date()
-        period = await calculate_period(user.employee_id, today.replace(day=1), today, SHIFT_PAY, session)
+        shift_date = (shift.started_at.astimezone(timezone.utc).date() if shift.started_at.tzinfo else shift.started_at.date())
+        date_from, date_to = _period_for_date(shift_date)
+        period = await calculate_period(user.employee_id, date_from, date_to, SHIFT_PAY, session)
         adjustments = (await session.execute(
             select(SalaryAdjustment).where(SalaryAdjustment.salary_period_id == period.id)
         )).scalars().all()
