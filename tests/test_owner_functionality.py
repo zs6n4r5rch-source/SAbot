@@ -1,5 +1,6 @@
 from importlib import import_module
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -60,3 +61,30 @@ def test_owner_module_is_registered_after_ia_module():
     assert "import app.webapp.p1_routes" in src
     assert "import app.webapp.owner_routes" in src
     assert src.index("import app.webapp.p1_routes") < src.index("import app.webapp.owner_routes")
+
+
+def test_mini_app_menu_has_no_known_dead_or_placeholder_transitions():
+    src = (ROOT / "app/webapp/static/index.html").read_text(encoding="utf-8")
+
+    # A menu action must point at a real page function rather than an alert or
+    # placeholder. The middleware may replace the legacy close-shift action,
+    # so the source itself must not contain a dead transition either.
+    assert "alert('Закрытие смены" not in src
+    assert "alert(\"Закрытие смены" not in src
+    assert "Смена выполняется через рабочий экран" not in src
+
+    # Every function used by owner/admin menu entries must be declared in the
+    # Mini App source. Arrow callbacks are excluded because they are inline.
+    menu_match = re.search(r"const groups=owner\?\[(.*?)\]:\[(.*?)\];groups\.forEach", src, re.S)
+    assert menu_match, "Cannot locate role-based Mini App menu"
+    menu = menu_match.group(0)
+    referenced = set(re.findall(r",([a-zA-Z_$][\w$]*)\]\],", menu))
+    declared = set(re.findall(r"(?:async )?function ([a-zA-Z_$][\w$]*)\s*\(", src))
+    missing = sorted(name for name in referenced if name not in declared)
+    assert not missing, f"Menu points to undefined functions: {missing}"
+
+
+def test_owner_ia_uses_violations_not_fines_label():
+    src = (ROOT / "app/webapp/static/index.html").read_text(encoding="utf-8")
+    assert "'Штрафы'" not in src
+    assert '>Штрафы<' not in src
