@@ -14,6 +14,7 @@ from app.bot.owner_data_menu import router as owner_data_router
 from app.bot.mailing import router as mailing_router
 from app.bot.smm import router as smm_router
 from app.bot.handlers import router
+from app.bot.menu_state import MenuStateResetMiddleware
 from app.bot.shift_closing import router as shift_closing_router, shift_close_scheduler
 from app.bot.restart import router as restart_router
 from app.services.langame import langame_client
@@ -54,6 +55,9 @@ async def main():
     await provision_staff()
     bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
+
+    # A stale FSM form must never consume a navigation button as numeric/text input.
+    dp.message.middleware(MenuStateResetMiddleware())
 
     if settings.mini_app_url:
         await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena", web_app=WebAppInfo(url=settings.mini_app_url)))
