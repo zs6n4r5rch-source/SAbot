@@ -30,9 +30,39 @@ def _owner(user):
         raise HTTPException(403, "OWNER access required")
 
 
+def _settings_dict(cfg):
+    return {
+        "configured": cfg is not None,
+        "enabled": cfg.enabled if cfg else True,
+        "timezone": cfg.report_timezone if cfg else "Europe/Moscow",
+        "hour": cfg.report_hour if cfg else 9,
+        "minute": cfg.report_minute if cfg else 0,
+        "include_sales": cfg.include_sales if cfg else True,
+        "include_shifts": cfg.include_shifts if cfg else True,
+        "include_inventory": cfg.include_inventory if cfg else True,
+        "include_discrepancies": cfg.include_discrepancies if cfg else True,
+        "include_salary": cfg.include_salary if cfg else True,
+        "include_clients": cfg.include_clients if cfg else True,
+        "send_excel": cfg.send_excel if cfg else True,
+    }
+
+
 @app.get("/api/owner/attention")
 async def owner_attention(request: Request):
     return await attention_center(request)
+
+
+@app.get("/api/owner/report-settings")
+async def get_owner_report_settings(request: Request):
+    user, _ = await current_user(request)
+    _owner(user)
+    async with SessionLocal() as session:
+        cfg = await session.scalar(
+            select(OwnerReportSettings).where(
+                OwnerReportSettings.owner_telegram_id == user.telegram_id
+            )
+        )
+        return _settings_dict(cfg)
 
 
 @app.put("/api/owner/report-settings")
@@ -44,7 +74,11 @@ async def update_owner_report_settings(request: Request, payload: OwnerReportSet
     except Exception:
         raise HTTPException(400, "Некорректный часовой пояс")
     async with SessionLocal() as session:
-        cfg = await session.scalar(select(OwnerReportSettings).where(OwnerReportSettings.owner_telegram_id == user.telegram_id))
+        cfg = await session.scalar(
+            select(OwnerReportSettings).where(
+                OwnerReportSettings.owner_telegram_id == user.telegram_id
+            )
+        )
         if cfg is None:
             cfg = OwnerReportSettings(owner_telegram_id=user.telegram_id)
             session.add(cfg)
@@ -60,7 +94,7 @@ async def update_owner_report_settings(request: Request, payload: OwnerReportSet
         cfg.include_clients = payload.include_clients
         cfg.send_excel = payload.send_excel
         await session.commit()
-        return {"ok": True, "configured": True, "enabled": cfg.enabled, "timezone": cfg.report_timezone, "hour": cfg.report_hour, "minute": cfg.report_minute, "include_sales": cfg.include_sales, "include_shifts": cfg.include_shifts, "include_inventory": cfg.include_inventory, "include_discrepancies": cfg.include_discrepancies, "include_salary": cfg.include_salary, "include_clients": cfg.include_clients, "send_excel": cfg.send_excel}
+        return {"ok": True, **_settings_dict(cfg)}
 
 
 @app.middleware("http")
@@ -91,10 +125,10 @@ async def owner_ux(request: Request, call_next):
   window.settings=async function(){
     clear();setBottom(false);back();
     try{
-      const d=await api('/api/settings');
-      const cfg={enabled:d.enabled!==false,timezone:d.timezone||'Europe/Moscow',hour:Number(d.hour||9),minute:Number(d.minute||0),include_sales:d.include_sales!==false,include_shifts:d.include_shifts!==false,include_inventory:d.include_inventory!==false,include_discrepancies:d.include_discrepancies!==false,include_salary:d.include_salary!==false,include_clients:d.include_clients!==false,send_excel:d.send_excel!==false};
-      root.insertAdjacentHTML('beforeend',`<div class="section-title"><h2>Настройки ежедневного отчёта</h2><span>${cfg.enabled?'Включён':'Выключен'}</span></div><section class="card"><label>Часовой пояс</label><input id="or-tz" value="${cfg.timezone}"><label>Час</label><input id="or-hour" type="number" min="0" max="23" value="${cfg.hour}"><label>Минута</label><input id="or-minute" type="number" min="0" max="59" value="${cfg.minute}"><label><input id="or-enabled" type="checkbox" ${cfg.enabled?'checked':''}> Включать ежедневный отчёт</label><label><input id="or-sales" type="checkbox" ${cfg.include_sales?'checked':''}> Продажи</label><label><input id="or-shifts" type="checkbox" ${cfg.include_shifts?'checked':''}> Смены</label><label><input id="or-inventory" type="checkbox" ${cfg.include_inventory?'checked':''}> Остатки</label><label><input id="or-disc" type="checkbox" ${cfg.include_discrepancies?'checked':''}> Расхождения</label><label><input id="or-salary" type="checkbox" ${cfg.include_salary?'checked':''}> Зарплата</label><label><input id="or-clients" type="checkbox" ${cfg.include_clients?'checked':''}> Клиенты</label><label><input id="or-excel" type="checkbox" ${cfg.send_excel?'checked':''}> Excel</label><button class="primary" id="or-save">Сохранить</button></section>`);
-      document.getElementById('or-save').onclick=async()=>{try{const value=id=>document.getElementById(id);await api('/api/owner/report-settings',{method:'PUT',body:JSON.stringify({enabled:value('or-enabled').checked,timezone:value('or-tz').value.trim(),hour:Number(value('or-hour').value),minute:Number(value('or-minute').value),include_sales:value('or-sales').checked,include_shifts:value('or-shifts').checked,include_inventory:value('or-inventory').checked,include_discrepancies:value('or-disc').checked,include_salary:value('or-salary').checked,include_clients:value('or-clients').checked,send_excel:value('or-excel').checked})});alert('Настройки сохранены')}catch(e){fail(e)}};
+      const d=await api('/api/owner/report-settings');
+      const cfg={enabled:d.enabled!==false,timezone:d.timezone||'Europe/Moscow',hour:Number(d.hour??9),minute:Number(d.minute??0),include_sales:d.include_sales!==false,include_shifts:d.include_shifts!==false,include_inventory:d.include_inventory!==false,include_discrepancies:d.include_discrepancies!==false,include_salary:d.include_salary!==false,include_clients:d.include_clients!==false,send_excel:d.send_excel!==false};
+      root.insertAdjacentHTML('beforeend',`<div class="section-title"><h2>Настройки ежедневного отчёта</h2><span id="or-status">${cfg.enabled?'Включён':'Выключен'}</span></div><section class="card"><label>Часовой пояс</label><input id="or-tz" value="${cfg.timezone}"><label>Час</label><input id="or-hour" type="number" min="0" max="23" value="${cfg.hour}"><label>Минута</label><input id="or-minute" type="number" min="0" max="59" value="${cfg.minute}"><label><input id="or-enabled" type="checkbox" ${cfg.enabled?'checked':''}> Включать ежедневный отчёт</label><label><input id="or-sales" type="checkbox" ${cfg.include_sales?'checked':''}> Продажи</label><label><input id="or-shifts" type="checkbox" ${cfg.include_shifts?'checked':''}> Смены</label><label><input id="or-inventory" type="checkbox" ${cfg.include_inventory?'checked':''}> Остатки</label><label><input id="or-disc" type="checkbox" ${cfg.include_discrepancies?'checked':''}> Расхождения</label><label><input id="or-salary" type="checkbox" ${cfg.include_salary?'checked':''}> Зарплата</label><label><input id="or-clients" type="checkbox" ${cfg.include_clients?'checked':''}> Клиенты</label><label><input id="or-excel" type="checkbox" ${cfg.send_excel?'checked':''}> Excel</label><button class="primary" id="or-save">Сохранить</button><div id="or-feedback" class="muted" style="margin-top:10px"></div></section>`);
+      document.getElementById('or-save').onclick=async()=>{try{const value=id=>document.getElementById(id);const saved=await api('/api/owner/report-settings',{method:'PUT',body:JSON.stringify({enabled:value('or-enabled').checked,timezone:value('or-tz').value.trim(),hour:Number(value('or-hour').value),minute:Number(value('or-minute').value),include_sales:value('or-sales').checked,include_shifts:value('or-shifts').checked,include_inventory:value('or-inventory').checked,include_discrepancies:value('or-disc').checked,include_salary:value('or-salary').checked,include_clients:value('or-clients').checked,send_excel:value('or-excel').checked})});document.getElementById('or-status').textContent=saved.enabled?'Включён':'Выключен';document.getElementById('or-feedback').textContent='Сохранено';}catch(e){fail(e)}};
     }catch(e){fail(e)}
   };
 })();
