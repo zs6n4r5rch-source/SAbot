@@ -65,11 +65,10 @@ def test_owner_module_is_registered_after_ia_module():
 
 def test_mini_app_menu_has_no_known_dead_or_placeholder_transitions():
     src = (ROOT / "app/webapp/static/index.html").read_text(encoding="utf-8")
-
-    # The legacy close-shift action is rewritten by p0_routes middleware, so
-    # verify that the replacement is present rather than treating the legacy
-    # source string as a dead transition.
     p0 = (ROOT / "app/webapp/p0_routes.py").read_text(encoding="utf-8")
+    p1 = (ROOT / "app/webapp/p1_routes.py").read_text(encoding="utf-8")
+
+    # The legacy close-shift action is rewritten by p0_routes middleware.
     assert "function closeShift()" in p0
     assert "Закрытие смены выполняется через рабочий экран бота." in src
 
@@ -82,8 +81,15 @@ def test_mini_app_menu_has_no_known_dead_or_placeholder_transitions():
     missing = sorted(required - declared)
     assert not missing, f"Menu points to undefined functions: {missing}"
 
+    # IA rename is applied at runtime, so both the replacement and the old
+    # label must be represented intentionally in the middleware.
+    assert 'html.replace("Штрафы · 30 дней", "Нарушения · 30 дней")' in p1
+    assert 'html.replace("\'Штрафы\'", "\'Нарушения\'")' in p1
 
-def test_owner_ia_uses_violations_not_fines_label():
-    src = (ROOT / "app/webapp/static/index.html").read_text(encoding="utf-8")
-    assert "'Штрафы'" not in src
-    assert '>Штрафы<' not in src
+
+def test_owner_ia_exposes_action_center_and_settings():
+    src = (ROOT / "app/webapp/owner_routes.py").read_text(encoding="utf-8")
+    assert "window.attention=async function()" in src
+    assert "window.settings=async function()" in src
+    assert "/api/owner/attention" in src
+    assert "/api/owner/report-settings" in src
