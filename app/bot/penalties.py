@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 
 from app.db.session import SessionLocal
 from app.bot.keyboards import admins_menu
-from app.models import Employee, SalaryViolation, TelegramUser, UserRole
+from app.models import Employee, SalaryViolation, TelegramUser, UserRole, Shift
 from app.services.audit import write_audit
 from app.services.auth import get_access
 
@@ -300,6 +300,10 @@ async def create_manual_penalty(actor_telegram_id: int, employee_id: int, code: 
         dismissal_required = premium or is_repeat_dismissal
         final_amount = Decimal("0") if premium or is_repeat_dismissal else (Decimal("500") if repeat and previous else amount)
         source_key = f"manual:{actor_telegram_id}:{datetime.now(timezone.utc).isoformat()}:{employee_id}:{code}"
+        active_shift = await session.scalar(select(Shift).where(
+            Shift.employee_id == employee_id,
+            Shift.ended_at.is_(None),
+        ).order_by(Shift.started_at.desc()).limit(1))
         session.add(SalaryViolation(
             employee_id=employee_id,
             rule_code=code,
@@ -307,6 +311,7 @@ async def create_manual_penalty(actor_telegram_id: int, employee_id: int, code: 
             amount=final_amount,
             source="manual",
             source_key=source_key,
+            shift_id=active_shift.id if active_shift else None,
             premium_reduction_percent=100 if (premium or is_repeat_dismissal) else 0,
             dismissal_required=(premium or is_repeat_dismissal),
             comment=comment[:4000],
@@ -343,5 +348,5 @@ async def auto_penalty_late_report(report, employee_id: int, session) -> bool:
     code = "telegram_report"
     title = RULE_MAP[code][1]
     session.add(SalaryViolation(employee_id=employee_id, rule_code=code, title=title, amount=Decimal("250"), source="automatic", source_key=source_key,
-                                comment="Отчёт по закрытой смене не отправлен в течение 30 минут после уведомления.", created_by=None))
+                                comment="Отчёт по закрытой смене не отправлен в течение 30 минут после уведомления.", created_by=None, shift_id=report.shift_id))
     return True
