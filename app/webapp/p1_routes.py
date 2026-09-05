@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
-from sqlalchemy import select, func
+from fastapi.responses import HTMLResponse
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models import Employee, InventoryBalance, SalaryViolation, Shift, ShiftCloseReport, UserRole
@@ -18,46 +18,27 @@ def _owner(user):
 async def attention_center(request: Request):
     user, _ = await current_user(request)
     _owner(user)
-    now = datetime.now(timezone.utc)
     async with SessionLocal() as session:
-        critical = (await session.execute(
-            select(InventoryBalance.id).where(
-                InventoryBalance.min_stock > 0,
-                InventoryBalance.quantity <= InventoryBalance.min_stock,
-            )
-        )).scalars().all()
-        dismissal = (await session.execute(
-            select(SalaryViolation, Employee).join(Employee, Employee.id == SalaryViolation.employee_id).where(
-                SalaryViolation.dismissal_required.is_(True)
-            ).order_by(SalaryViolation.created_at.desc())
-        )).all()
-        open_shifts = (await session.execute(
-            select(Shift, Employee).outerjoin(Employee, Employee.id == Shift.employee_id).where(
-                Shift.ended_at.is_(None)
-            ).order_by(Shift.started_at.asc())
-        )).all()
-        closed_shifts = (await session.execute(
-            select(Shift, Employee).outerjoin(Employee, Employee.id == Shift.employee_id).where(
-                Shift.status == "closed"
-            ).order_by(Shift.started_at.desc()).limit(200)
-        )).all()
+        critical = (await session.execute(select(InventoryBalance.id).where(
+            InventoryBalance.min_stock > 0,
+            InventoryBalance.quantity <= InventoryBalance.min_stock,
+        ))).scalars().all()
+        dismissal = (await session.execute(select(SalaryViolation, Employee).join(
+            Employee, Employee.id == SalaryViolation.employee_id
+        ).where(SalaryViolation.dismissal_required.is_(True)).order_by(
+            SalaryViolation.created_at.desc()
+        ))).all()
+        open_shifts = (await session.execute(select(Shift).where(Shift.ended_at.is_(None)))).scalars().all()
+        closed_shifts = (await session.execute(select(Shift, Employee).outerjoin(
+            Employee, Employee.id == Shift.employee_id
+        ).where(Shift.status == "closed").order_by(Shift.started_at.desc()).limit(200))).all()
         shift_ids = [s.id for s, _ in closed_shifts]
-        reports = []
-        if shift_ids:
-            reports = (await session.execute(
-                select(ShiftCloseReport).where(ShiftCloseReport.shift_id.in_(shift_ids))
-            )).scalars().all()
+        reports = (await session.execute(select(ShiftCloseReport).where(
+            ShiftCloseReport.shift_id.in_(shift_ids)
+        ))).scalars().all() if shift_ids else []
         report_map = {r.shift_id: r for r in reports}
-        awaiting = [
-            (s, e) for s, e in closed_shifts
-            if report_map.get(s.id) is None or report_map[s.id].status != "submitted"
-        ]
-        cash_issues = [
-            (s, e, report_map[s.id]) for s, e in closed_shifts
-            if s.id in report_map and report_map[s.id].status == "submitted"
-            and report_map[s.id].cash_difference is not None
-            and dec(report_map[s.id].cash_difference) < 0
-        ]
+        awaiting = [(s, e) for s, e in closed_shifts if report_map.get(s.id) is None or report_map[s.id].status != "submitted"]
+        cash_issues = [(s, e, report_map[s.id]) for s, e in closed_shifts if s.id in report_map and report_map[s.id].status == "submitted" and report_map[s.id].cash_difference is not None and dec(report_map[s.id].cash_difference) < 0]
         return {
             "count": len(critical) + len(dismissal) + len(awaiting) + len(cash_issues),
             "critical_stock": len(critical),
@@ -80,16 +61,13 @@ async def owner_shifts(request: Request, days: int = 30):
     _owner(user)
     days = min(max(days, 1), 90)
     now = datetime.now(timezone.utc)
-    start = now - __import__("datetime").timedelta(days=days)
+    start = now - timedelta(days=days)
     async with SessionLocal() as session:
-        rows = (await session.execute(
-            select(Shift, Employee, ShiftCloseReport)
-            .outerjoin(Employee, Employee.id == Shift.employee_id)
-            .outerjoin(ShiftCloseReport, ShiftCloseReport.shift_id == Shift.id)
-            .where(Shift.started_at >= start)
-            .order_by(Shift.started_at.desc())
-            .limit(200)
-        )).all()
+        rows = (await session.execute(select(Shift, Employee, ShiftCloseReport).outerjoin(
+            Employee, Employee.id == Shift.employee_id
+        ).outerjoin(ShiftCloseReport, ShiftCloseReport.shift_id == Shift.id).where(
+            Shift.started_at >= start
+        ).order_by(Shift.started_at.desc()).limit(200))).all()
         result = []
         for shift, employee, report in rows:
             end = shift.ended_at or now
@@ -126,18 +104,18 @@ async def p1_p2_ux(request: Request, call_next):
   if(typeof originalHome!=='function') return;
   window.home=async function(){
     await originalHome();
-    if(window.me && window.me.role==='owner'){
-      try{
-        const d=await api('/api/attention-center');
-        const count=Number(d.count||0);
-        const label=count?`Требует внимания · ${count}`:'Требует внимания';
-        const box=document.createElement('section');
-        box.className='card';
-        box.innerHTML=`<div class="section-title"><h2>🔴 ${label}</h2><span>центр действий</span></div><p class="muted">Нарушения, незакрытые отчёты, кассовые расхождения и критические остатки.</p><button class="primary" id="attention-home-btn">Открыть центр внимания</button>`;
-        root.appendChild(box);
-        document.getElementById('attention-home-btn').onclick=attention;
-      }catch(e){}
-    }
+    try{
+      const who=await api('/api/me');
+      if(who.role!=='owner') return;
+      const d=await api('/api/attention-center');
+      const count=Number(d.count||0);
+      const label=count?`Требует внимания · ${count}`:'Требует внимания';
+      const box=document.createElement('section');
+      box.className='card';
+      box.innerHTML=`<div class="section-title"><h2>🔴 ${label}</h2><span>центр действий</span></div><p class="muted">Нарушения, незакрытые отчёты, кассовые расхождения и критические остатки.</p><button class="primary" id="attention-home-btn">Открыть центр внимания</button>`;
+      root.appendChild(box);
+      document.getElementById('attention-home-btn').onclick=attention;
+    }catch(e){}
   };
 })();
 </script>'''
