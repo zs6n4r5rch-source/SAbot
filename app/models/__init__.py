@@ -27,7 +27,17 @@ from app.models.base import (
     AuditLog,
     LangameSyncLog,
 )
-from app.models.owner import Guest, GuestTelegram, OwnerDailyReportDelivery, OwnerReportSettings
+from app.models.owner import (
+    Guest,
+    GuestTelegram,
+    GuestGroup,
+    GuestGroupMember,
+    MarketingCampaign,
+    MarketingCampaignGroup,
+    MarketingRecipient,
+    OwnerDailyReportDelivery,
+    OwnerReportSettings,
+)
 
 _SALARY_EXPORTS = {
     "ShiftCloseReport",
@@ -56,7 +66,9 @@ __all__ = [
     "InventoryOperation", "InventoryOperationType", "InventoryStatus", "StockSnapshot",
     "Writeoff", "WriteoffItem", "WriteoffStatus", "WriteoffReason", "Discrepancy",
     "DiscrepancyStatus", "AuditLog", "LangameSyncLog",
-    "Guest", "GuestTelegram", "OwnerDailyReportDelivery", "OwnerReportSettings",
+    "Guest", "GuestTelegram", "GuestGroup", "GuestGroupMember",
+    "MarketingCampaign", "MarketingCampaignGroup", "MarketingRecipient",
+    "OwnerDailyReportDelivery", "OwnerReportSettings",
     "ShiftCloseReport", "ShiftCloseReportStatus", "ShiftCloseStockItem",
     "SalaryRule", "SalaryPeriod", "SalaryAdjustment", "SalaryViolation", "SalaryPayment",
     "NonMonetaryBonus",
