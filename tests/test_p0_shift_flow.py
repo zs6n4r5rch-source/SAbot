@@ -27,3 +27,16 @@ def test_p0_models_are_exported_from_isolated_module():
     assert "from app.models.salary import" in init
     for name in ["ShiftCloseReport", "ShiftCloseStockItem", "SalaryPeriod", "SalaryViolation", "SalaryPayment", "NonMonetaryBonus"]:
         assert f"class {name}" in salary
+
+
+def test_p0_financial_and_result_routes_are_registered():
+    root = Path(__file__).parents[1]
+    routes = (root / "app" / "webapp" / "p0_finance.py").read_text(encoding="utf-8")
+    main = (root / "app" / "main.py").read_text(encoding="utf-8")
+    assert '@app.post("/api/bonuses")' in routes
+    assert '@app.get("/api/my-salary/current")' in routes
+    assert '@app.get("/api/my-shift-result")' in routes
+    assert "p0_finance" in main
+    assert "calculate_period" in routes
+    assert "SalaryAdjustment" in routes
+    assert "SalaryViolation" in routes
