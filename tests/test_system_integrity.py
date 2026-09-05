@@ -24,7 +24,7 @@ def test_langame_risk_baseline_does_not_fetch_each_historical_shift():
 
 
 def test_shift_close_shortages_require_comments_and_store_them():
-    model = (ROOT / "app" / "models" / "base.py").read_text()
+    model = (ROOT / "app" / "models" / "salary.py").read_text()
     flow = (ROOT / "app" / "bot" / "shift_closing.py").read_text()
     assert 'cash_comment: Mapped[str | None]' in model
     assert 'comment: Mapped[str | None] = mapped_column(Text)' in model
@@ -45,7 +45,7 @@ def test_shift_close_comments_migration_exists():
 
 
 def test_shift_close_shortage_reasons_are_structured():
-    model = (ROOT / "app" / "models" / "base.py").read_text()
+    model = (ROOT / "app" / "models" / "salary.py").read_text()
     flow = (ROOT / "app" / "bot" / "shift_closing.py").read_text()
     migration = (ROOT / "alembic" / "versions" / "0013_shift_shortage_reasons.py").read_text()
     assert 'cash_shortage_reason: Mapped[str | None]' in model
