@@ -4,7 +4,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from app.bot.inline_keyboards import admin_inline_menu, owner_inline_menu
-from app.bot.owner_dashboard import dashboard_text
 from app.config import settings
 from app.services.auth import get_access
 
@@ -26,12 +25,12 @@ async def start_entry(message: Message, state: FSMContext):
     if user is not None:
         if user.role == "owner":
             await message.answer(
-                await dashboard_text(),
+                "👑 <b>Панель владельца</b>\n\nВыберите нужный раздел ниже или откройте Strike Arena.",
                 reply_markup=owner_inline_menu(settings.mini_app_url or None),
             )
         else:
             await message.answer(
-                "👤 <b>Добро пожаловать!</b>\n\nОткрывайте Strike Arena или выберите нужный раздел ниже.",
+                "👤 <b>Рабочий кабинет</b>\n\nОткройте Strike Arena или выберите нужный раздел ниже.",
                 reply_markup=admin_inline_menu(settings.mini_app_url or None),
             )
         return
