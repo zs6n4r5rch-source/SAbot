@@ -3,6 +3,7 @@ from decimal import Decimal
 import math
 
 from fastapi import HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -160,3 +161,36 @@ async def my_shift_result(request: Request):
                 "status": period.status,
             },
         }
+
+
+@app.middleware("http")
+async def p0_shift_result_ux(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path != "/" or response.status_code != 200:
+        return response
+    body = getattr(response, "body", None)
+    if body is None:
+        chunks = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk)
+        body = b"".join(chunks)
+    html = body.decode("utf-8")
+    marker = "Смена зафиксирована. Зарплата пересчитывается по закрытым сменам и начислениям."
+    html = html.replace(
+        marker,
+        marker + '<br><br><button class="secondary" onclick="shiftResult()">Посмотреть результат и зарплату</button>',
+        1,
+    )
+    fn = r'''
+async function shiftResult(){
+  clear();setBottom(false);back();
+  try{
+    const d=await api('/api/my-shift-result');
+    const bonuses=(d.bonuses||[]).map(x=>row('Премия',money(x.amount),x.reason||'')).join('')||'<div class="empty">Нет зафиксированных премий.</div>';
+    const violations=(d.violations||[]).map(x=>row('Нарушение',money(x.amount),`${x.title}${x.dismissal_required?' · требуется решение':''}`)).join('')||'<div class="empty">Нарушений по смене нет.</div>';
+    root.innerHTML=`<section class="hero"><div class="eyebrow">Результат смены</div><div class="hero-title">Смена #${d.shift.langame_shift_id}</div><div class="hero-sub">Итог работы, закрытия и начислений.</div></section>${card('Продажи',`${row('Наличные',money(d.sales.cash))}${row('Карта',money(d.sales.card))}${row('Мобильные',money(d.sales.mobile))}${row('Возвраты наличными',money(d.sales.refunds_cash))}${row('Возвраты картой',money(d.sales.refunds_card))}${row('Инкассация',money(d.sales.collection))}`)}${card('Закрытие',`${row('Кассовая разница',money(d.close.cash_difference))}${row('Расхождения товаров',d.close.stock_discrepancies_count||0)}${row('Статус',d.close.status||'—')}`)}${card('Премии',bonuses)}${card('Нарушения',violations)}${card('Зарплата',`${row('База',money(d.salary.base))}${row('Премии / корректировки',money(d.salary.bonus))}<div class="section-title"><h2>Итого</h2><span>${d.salary.status}</span></div><div class="hero-title">${money(d.salary.total)}</div>`)}`;
+  }catch(e){fail(e)}
+}
+'''
+    html = html.replace("\nfunction goNav(which)", "\n" + fn + "\nfunction goNav(which)", 1)
+    return HTMLResponse(html, status_code=response.status_code, headers={k:v for k,v in response.headers.items() if k.lower() != "content-length"})
