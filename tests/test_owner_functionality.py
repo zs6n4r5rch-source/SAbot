@@ -1,3 +1,4 @@
+import os
 from importlib import import_module
 from pathlib import Path
 
@@ -14,7 +15,13 @@ def test_owner_models_are_exported_for_web_daily_report_and_mailings():
     assert '"OwnerDailyReportDelivery"' in src
 
 
-def test_owner_runtime_modules_import_without_model_registration_errors():
+def test_owner_runtime_modules_import_without_model_registration_errors(monkeypatch):
+    # These modules import the application settings at module load time.  The
+    # test only verifies import/model registration, so provide harmless values
+    # instead of requiring production secrets in CI.
+    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///./owner-import-test.db")
+    monkeypatch.setenv("LANGAME_API_KEY", "ci-test-key")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123456:ci-test-token")
     import_module("app.webapp.owner_routes")
     import_module("app.bot.mailing")
 
