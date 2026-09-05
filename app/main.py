@@ -24,6 +24,7 @@ from app.models.base import Base
 from app.models.smm import SMMAccess, SMMTask, SMMTaskRate
 from app.webapp.p0_routes import app as web_app
 import app.webapp.p0_finance  # register P0 financial bonus/salary/result routes
+import app.webapp.p1_routes  # register P1 attention center and P2 IA UX routes
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
@@ -79,29 +80,17 @@ async def main():
     report_task = asyncio.create_task(daily_report_scheduler(bot))
     shift_close_task = asyncio.create_task(shift_close_scheduler(bot))
     polling_lock = PollingLock()
-
     try:
-        logger.info("Starting Strike Arena bot (webhook=%s)...", webhook_mode)
+        await polling_lock.acquire()
         if webhook_mode:
-            await web_task
+            await asyncio.gather(web_task, report_task, shift_close_task)
         else:
-            await polling_lock.acquire()
             await dp.start_polling(bot)
     finally:
-        if not webhook_mode:
-            await polling_lock.release()
-        web_server.should_exit = True
-        if not web_task.done():
-            await web_task
-        report_task.cancel(); shift_close_task.cancel()
-        for task in (report_task, shift_close_task):
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        await polling_lock.release()
+        for task in (web_task, report_task, shift_close_task):
+            task.cancel()
         await bot.session.close()
-        await langame_client.aclose()
-        await engine.dispose()
 
 
 if __name__ == "__main__":
