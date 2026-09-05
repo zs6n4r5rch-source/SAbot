@@ -13,6 +13,7 @@ from app.bot.owner_bonus_menu import router as owner_bonus_router
 from app.bot.owner_data_menu import router as owner_data_router
 from app.bot.mailing import router as mailing_router
 from app.bot.smm import router as smm_router
+from app.bot.inventory_quality import router as inventory_quality_router
 from app.bot.handlers import router
 from app.bot.menu_state import MenuStateResetMiddleware
 from app.bot.shift_closing import router as shift_closing_router, shift_close_scheduler
@@ -66,6 +67,9 @@ async def main():
     dp.include_router(owner_bonus_router)
     dp.include_router(owner_data_router)
     dp.include_router(smm_router)
+    # These handlers intentionally precede the legacy inventory handlers so the
+    # user sees product names instead of raw/empty LANGAME product labels.
+    dp.include_router(inventory_quality_router)
     dp.include_router(router)
     dp.include_router(mailing_router)
     dp.include_router(shift_closing_router)
