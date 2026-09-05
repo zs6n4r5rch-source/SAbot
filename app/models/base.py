@@ -164,6 +164,198 @@ class Shift(Base):
     __table_args__ = (CheckConstraint("status IN ('open', 'closed')", name="ck_shifts_status"),)
 
 
+class ProductCategory(Base):
+    __tablename__ = "product_categories"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class Product(Base):
+    __tablename__ = "products"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    langame_product_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("product_categories.id", ondelete="SET NULL"), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class StockSnapshot(Base):
+    __tablename__ = "stock_snapshots"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    sync_id: Mapped[int | None] = mapped_column(ForeignKey("langame_sync_log.id", ondelete="SET NULL"), index=True)
+
+
+class InventoryBalance(Base):
+    __tablename__ = "inventory_balances"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0, server_default="0")
+    min_stock: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    __table_args__ = (UniqueConstraint("club_id", "product_id"),)
+
+
+class InventoryOperation(Base):
+    __tablename__ = "inventory_operations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"), index=True)
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id"), index=True)
+    operation_type: Mapped[str] = mapped_column(String(32), index=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    source: Mapped[str | None] = mapped_column(String(64))
+    source_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    __table_args__ = (
+        CheckConstraint("operation_type IN ('arrival','sale','writeoff','inventory_adjustment','manual_adjustment')", name="ck_inventory_operations_type"),
+        Index("ix_inventory_operations_source", "source", "source_id"),
+    )
+
+
+class WriteoffReason(Base):
+    __tablename__ = "writeoff_reasons"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class Writeoff(Base):
+    __tablename__ = "writeoffs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), index=True)
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id"), index=True)
+    reason_id: Mapped[int] = mapped_column(ForeignKey("writeoff_reasons.id"))
+    status: Mapped[str] = mapped_column(String(20), default=WriteoffStatus.PENDING.value, server_default=WriteoffStatus.PENDING.value, index=True)
+    comment: Mapped[str | None] = mapped_column(Text)
+    approved_by: Mapped[int | None] = mapped_column(BigInteger)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (CheckConstraint("status IN ('pending','approved','rejected')", name="ck_writeoffs_status"),)
+
+
+class WriteoffItem(Base):
+    __tablename__ = "writeoff_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    writeoff_id: Mapped[int] = mapped_column(ForeignKey("writeoffs.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+
+
+class Inventory(Base):
+    __tablename__ = "inventories"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), index=True)
+    created_by: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(20), default=InventoryStatus.DRAFT.value, server_default=InventoryStatus.DRAFT.value, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    comment: Mapped[str | None] = mapped_column(Text)
+    __table_args__ = (CheckConstraint("status IN ('draft','in_progress','completed','cancelled')", name="ck_inventories_status"),)
+
+
+class InventoryItem(Base):
+    __tablename__ = "inventory_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    inventory_id: Mapped[int] = mapped_column(ForeignKey("inventories.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    system_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    actual_quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    difference: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    __table_args__ = (UniqueConstraint("inventory_id", "product_id"),)
+
+
+class Discrepancy(Base):
+    __tablename__ = "discrepancies"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), index=True)
+    inventory_id: Mapped[int | None] = mapped_column(ForeignKey("inventories.id"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"), index=True)
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id"), index=True)
+    quantity_difference: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    amount_difference: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    status: Mapped[str] = mapped_column(String(20), default=DiscrepancyStatus.OPEN.value, server_default=DiscrepancyStatus.OPEN.value, index=True)
+    reason: Mapped[str | None] = mapped_column(Text)
+    resolved_by: Mapped[int | None] = mapped_column(BigInteger)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolution_comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (CheckConstraint("status IN ('open','reviewed','resolved')", name="ck_discrepancies_status"),)
+
+
+class LangameSyncLog(Base):
+    __tablename__ = "langame_sync_log"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    resource: Mapped[str] = mapped_column(String(100), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    error: Mapped[str | None] = mapped_column(Text)
+
+
+class ShiftCloseReportStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUBMITTED = "submitted"
+
+
+class ShiftCloseReport(Base):
+    __tablename__ = "shift_close_reports"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    shift_id: Mapped[int] = mapped_column(ForeignKey("shifts.id", ondelete="CASCADE"), unique=True, index=True)
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default=ShiftCloseReportStatus.PENDING.value, server_default=ShiftCloseReportStatus.PENDING.value, index=True)
+    cash_expected: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    cash_actual: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    cash_difference: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    cash_shortage_reason: Mapped[str | None] = mapped_column(String(100))
+    cash_comment: Mapped[str | None] = mapped_column(Text)
+    stock_items_count: Mapped[int | None] = mapped_column(Integer)
+    stock_discrepancies_count: Mapped[int | None] = mapped_column(Integer)
+    first_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleaning_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleaning_performed_by: Mapped[str | None] = mapped_column(String(255))
+    cleaning_bonus_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (CheckConstraint("status IN ('pending','in_progress','submitted')", name="ck_shift_close_report_status"),)
+
+
+class ShiftCloseStockItem(Base):
+    __tablename__ = "shift_close_stock_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    report_id: Mapped[int] = mapped_column(ForeignKey("shift_close_reports.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    langame_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    actual_quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    difference: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    shortage_reason: Mapped[str | None] = mapped_column(String(100))
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    actor_telegram_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
+    actor_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"), index=True)
+    action: Mapped[str] = mapped_column(String(100), index=True)
+    entity_type: Mapped[str] = mapped_column(String(100), index=True)
+    entity_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    payload: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 class SalaryRule(Base):
     __tablename__ = "salary_rules"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -197,34 +389,6 @@ class SalaryAdjustment(Base):
     reason: Mapped[str] = mapped_column(Text)
     created_by: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
-class SMMTask(Base):
-    __tablename__ = "smm_tasks"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
-    task_type: Mapped[str] = mapped_column(String(50), index=True)
-    title: Mapped[str] = mapped_column(String(255))
-    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=1, server_default="1")
-    unit: Mapped[str] = mapped_column(String(50), default="шт", server_default="шт")
-    unit_rate: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, server_default="0")
-    status: Mapped[str] = mapped_column(String(20), default="submitted", server_default="submitted", index=True)
-    proof: Mapped[str | None] = mapped_column(Text)
-    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
-    approved_by: Mapped[int | None] = mapped_column(BigInteger)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    comment: Mapped[str | None] = mapped_column(Text)
-    __table_args__ = (CheckConstraint("status IN ('submitted','approved','rejected')", name="ck_smm_tasks_status"),)
-
-
-class SalaryTaskRate(Base):
-    __tablename__ = "salary_task_rates"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    task_type: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-    title: Mapped[str] = mapped_column(String(255))
-    unit: Mapped[str] = mapped_column(String(50), default="шт", server_default="шт")
-    rate: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, server_default="0")
-    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
 
 class NonMonetaryBonus(Base):
