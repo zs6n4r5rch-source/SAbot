@@ -88,9 +88,19 @@ async def main():
             await dp.start_polling(bot)
     finally:
         await polling_lock.release()
-        for task in (web_task, report_task, shift_close_task):
-            task.cancel()
+        web_server.should_exit = True
+        if not web_task.done():
+            await web_task
+        report_task.cancel()
+        shift_close_task.cancel()
+        for task in (report_task, shift_close_task):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         await bot.session.close()
+        await langame_client.aclose()
+        await engine.dispose()
 
 
 if __name__ == "__main__":
