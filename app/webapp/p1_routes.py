@@ -129,7 +129,8 @@ async def p1_p2_ux(request: Request, call_next):
         const state=sh.state==='open'?'Смена в работе':sh.state==='awaiting_report'?'Смена ждёт закрывающий отчёт':sh.state==='closed'?'Смена закрыта':'Смена не найдена';
         const salary=await api('/api/my-salary/current');
         const box=document.createElement('section');box.className='card';
-        box.innerHTML=`<div class="section-title"><h2>Моё состояние</h2><span>${state}</span></div><div class="row"><div class="row-main"><div class="row-title">Смена</div><div class="row-sub">${sh.started_at||'—'} → ${sh.ended_at||'сейчас'}</div></div><div class="row-value">${state}</div></div><div class="row"><div class="row-main"><div class="row-title">Зарплата за текущий период</div><div class="row-sub">Период ${salary.from} — ${salary.to}</div></div><div class="row-value">${money(salary.total)}</div></div><button class="primary" id="shift-home-btn">${sh.state==='open'?'Открыть смену':sh.state==='awaiting_report'?'Закрыть смену':'Посмотреть результат'}</button>`;
+        const actionLabel=sh.state==='open'?'Открыть рабочий экран':sh.state==='awaiting_report'?'Закрыть смену':'Посмотреть результат';
+        box.innerHTML=`<div class="section-title"><h2>Моё состояние</h2><span>${state}</span></div><div class="row"><div class="row-main"><div class="row-title">Смена</div><div class="row-sub">${sh.started_at||'—'} → ${sh.ended_at||'сейчас'}</div></div><div class="row-value">${state}</div></div><div class="row"><div class="row-main"><div class="row-title">Зарплата за текущий период</div><div class="row-sub">Период ${salary.from} — ${salary.to}</div></div><div class="row-value">${money(salary.total)}</div></div><button class="primary" id="shift-home-btn">${actionLabel}</button>`;
         root.appendChild(box);
         document.getElementById('shift-home-btn').onclick=sh.state==='awaiting_report'||sh.state==='open'?closeShift:shiftResult;
       }
