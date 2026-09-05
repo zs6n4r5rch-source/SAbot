@@ -29,7 +29,7 @@ def test_p0_models_are_exported_from_isolated_module():
         assert f"class {name}" in salary
 
 
-def test_p0_financial_and_result_routes_are_registered():
+def test_p0_financial_and_result_routes_are_registered_and_fresh():
     root = Path(__file__).parents[1]
     routes = (root / "app" / "webapp" / "p0_finance.py").read_text(encoding="utf-8")
     main = (root / "app" / "main.py").read_text(encoding="utf-8")
@@ -40,3 +40,14 @@ def test_p0_financial_and_result_routes_are_registered():
     assert "calculate_period" in routes
     assert "SalaryAdjustment" in routes
     assert "SalaryViolation" in routes
+    # Salary/result endpoints must refresh the local shift snapshot from LANGAME
+    # before calculating totals, otherwise a just-closed shift can be omitted.
+    assert routes.count("await sync_shifts_data()") >= 3
+    assert "math.isfinite(payload.amount)" in routes
+
+
+def test_p0_result_screen_is_reachable_after_close():
+    root = Path(__file__).parents[1]
+    routes = (root / "app" / "webapp" / "p0_routes.py").read_text(encoding="utf-8")
+    assert "async function renderShiftResult()" in routes
+    assert "api('/api/my-shift-result')" in routes
