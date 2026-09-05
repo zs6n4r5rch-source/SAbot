@@ -102,6 +102,14 @@ async def p1_p2_ux(request: Request, call_next):
 (function(){
   const originalHome=window.home;
   if(typeof originalHome!=='function') return;
+  window.ownerShifts=async function(){
+    clear();setBottom(false);back();
+    try{
+      const d=await api('/api/owner-shifts');
+      const body=d.items.length?d.items.map(x=>{const h=Math.floor(x.duration_minutes/60),m=x.duration_minutes%60;const state=x.status==='open'?'В работе':(x.report_status==='submitted'?'Закрыт':'Ждёт отчёт');return `<div class="row"><div class="row-main"><div class="row-title">${x.employee||'Администратор'}</div><div class="row-sub">${x.started_at||''} → ${x.ended_at||'сейчас'} · ${h}ч ${m}м</div></div><div class="row-value">${state}</div></div>`}).join(''):'<div class="empty">Смен за период нет.</div>';
+      root.insertAdjacentHTML('beforeend',card('Контроль смен',body));
+    }catch(e){fail(e)}
+  };
   window.home=async function(){
     await originalHome();
     try{
@@ -112,9 +120,10 @@ async def p1_p2_ux(request: Request, call_next):
       const label=count?`Требует внимания · ${count}`:'Требует внимания';
       const box=document.createElement('section');
       box.className='card';
-      box.innerHTML=`<div class="section-title"><h2>🔴 ${label}</h2><span>центр действий</span></div><p class="muted">Нарушения, незакрытые отчёты, кассовые расхождения и критические остатки.</p><button class="primary" id="attention-home-btn">Открыть центр внимания</button>`;
+      box.innerHTML=`<div class="section-title"><h2>🔴 ${label}</h2><span>центр действий</span></div><p class="muted">Нарушения, незакрытые отчёты, кассовые расхождения и критические остатки.</p><button class="primary" id="attention-home-btn">Открыть центр внимания</button><button class="secondary" id="owner-shifts-home-btn" style="margin-top:8px">Контроль смен</button>`;
       root.appendChild(box);
       document.getElementById('attention-home-btn').onclick=attention;
+      document.getElementById('owner-shifts-home-btn').onclick=ownerShifts;
     }catch(e){}
   };
 })();
