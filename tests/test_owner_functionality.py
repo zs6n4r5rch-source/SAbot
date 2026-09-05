@@ -1,3 +1,4 @@
+from importlib import import_module
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +12,11 @@ def test_owner_models_are_exported_for_web_daily_report_and_mailings():
     assert '"MarketingRecipient"' in src
     assert '"OwnerReportSettings"' in src
     assert '"OwnerDailyReportDelivery"' in src
+
+
+def test_owner_runtime_modules_import_without_model_registration_errors():
+    import_module("app.webapp.owner_routes")
+    import_module("app.bot.mailing")
 
 
 def test_owner_attention_is_detailed_and_actionable():
