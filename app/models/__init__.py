@@ -28,6 +28,8 @@ from app.models.base import (
     BonusRecord,
     AuditLog,
     LangameSyncLog,
+    CampaignStatus,
+    RecipientStatus,
 )
 from app.models.guests import (
     Guest,
@@ -36,6 +38,7 @@ from app.models.guests import (
     GuestTelegram,
     GuestLinkToken,
     MarketingCampaign,
+    MarketingCampaignGroup,
     MarketingRecipient,
 )
 
@@ -47,6 +50,7 @@ __all__ = [
     "InventoryOperation", "InventoryOperationType", "InventoryStatus", "StockSnapshot",
     "Writeoff", "WriteoffItem", "WriteoffStatus", "WriteoffReason", "Discrepancy",
     "DiscrepancyStatus", "SalaryViolation", "BonusRecord", "AuditLog", "LangameSyncLog",
+    "CampaignStatus", "RecipientStatus",
     "Guest", "GuestGroup", "GuestGroupMember", "GuestTelegram", "GuestLinkToken",
-    "MarketingCampaign", "MarketingRecipient",
+    "MarketingCampaign", "MarketingCampaignGroup", "MarketingRecipient",
 ]
