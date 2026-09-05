@@ -9,6 +9,8 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from app.config import settings
 from app.bot.admin_delete import router as admin_delete_router
+from app.bot.inventory_quality import router as inventory_quality_router
+from app.bot.menu_state import MenuStateResetMiddleware
 from app.bot.owner_bonus_menu import router as owner_bonus_router
 from app.bot.owner_data_menu import router as owner_data_router
 from app.bot.smm import router as smm_router
@@ -51,6 +53,7 @@ async def main():
     await provision_staff()
     bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
+    dp.message.middleware(MenuStateResetMiddleware())
 
     if settings.mini_app_url:
         await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena", web_app=WebAppInfo(url=settings.mini_app_url)))
@@ -61,6 +64,9 @@ async def main():
     dp.include_router(owner_bonus_router)
     dp.include_router(owner_data_router)
     dp.include_router(smm_router)
+    # These explicit menu handlers precede the legacy inventory router so
+    # navigation cannot fall through into old numeric/form states.
+    dp.include_router(inventory_quality_router)
     dp.include_router(router)
     dp.include_router(shift_closing_router)
     dp.include_router(restart_router)
