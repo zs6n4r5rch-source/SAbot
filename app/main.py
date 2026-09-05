@@ -11,6 +11,7 @@ from app.config import settings
 from app.bot.admin_delete import router as admin_delete_router
 from app.bot.owner_bonus_menu import router as owner_bonus_router
 from app.bot.owner_data_menu import router as owner_data_router
+from app.bot.mailing import router as mailing_router
 from app.bot.smm import router as smm_router
 from app.bot.handlers import router
 from app.bot.shift_closing import router as shift_closing_router, shift_close_scheduler
@@ -62,6 +63,7 @@ async def main():
     dp.include_router(owner_data_router)
     dp.include_router(smm_router)
     dp.include_router(router)
+    dp.include_router(mailing_router)
     dp.include_router(shift_closing_router)
     dp.include_router(restart_router)
     web_app.include_router(statistics_router)
