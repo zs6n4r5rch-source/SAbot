@@ -195,7 +195,7 @@ class InventoryBalance(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
-    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0, server_default="5")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0, server_default="0")
     min_stock: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=5, server_default="5")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     __table_args__ = (UniqueConstraint("club_id", "product_id"),)
