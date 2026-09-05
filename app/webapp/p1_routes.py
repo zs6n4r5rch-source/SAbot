@@ -129,4 +129,6 @@ async def p1_p2_ux(request: Request, call_next):
 })();
 </script>'''
     html = html.replace("</body>", injection + "</body>")
-    return HTMLResponse(content=html, status_code=response.status_code, headers=dict(response.headers), media_type="text/html")
+    headers = dict(response.headers)
+    headers.pop("content-length", None)
+    return HTMLResponse(content=html, status_code=response.status_code, headers=headers, media_type="text/html")
