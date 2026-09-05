@@ -16,6 +16,7 @@ from app.bot.keyboards import (
 )
 
 from app.db.session import SessionLocal
+from app.config import settings
 
 from app.models import (
     Employee,
