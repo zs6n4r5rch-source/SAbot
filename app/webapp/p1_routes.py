@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models import Employee, InventoryBalance, SalaryViolation, Shift, ShiftCloseReport, UserRole
+from app.models import Employee, InventoryBalance, Product, SalaryViolation, Shift, ShiftCloseReport, UserRole
 from app.webapp.app import app, current_user, iso, dec
 
 
@@ -19,10 +19,12 @@ async def attention_center(request: Request):
     user, _ = await current_user(request)
     _owner(user)
     async with SessionLocal() as session:
-        critical = (await session.execute(select(InventoryBalance.id).where(
+        critical = (await session.execute(select(InventoryBalance, Product).join(
+            Product, Product.id == InventoryBalance.product_id
+        ).where(
             InventoryBalance.min_stock > 0,
             InventoryBalance.quantity <= InventoryBalance.min_stock,
-        ))).scalars().all()
+        ))).all()
         dismissal = (await session.execute(select(SalaryViolation, Employee).join(
             Employee, Employee.id == SalaryViolation.employee_id
         ).where(SalaryViolation.dismissal_required.is_(True)).order_by(
@@ -50,7 +52,7 @@ async def attention_center(request: Request):
                 *[{"type": "dismissal_required", "title": "Требуется решение по нарушению", "employee": e.full_name, "violation_id": v.id, "amount": dec(v.amount), "created_at": iso(v.created_at)} for v, e in dismissal[:20]],
                 *[{"type": "shift_report", "title": "Смена ждёт закрывающего отчёта", "employee": e.full_name if e else str(s.employee_id), "shift_id": s.id, "started_at": iso(s.started_at), "ended_at": iso(s.ended_at)} for s, e in awaiting[:20]],
                 *[{"type": "cash_issue", "title": "Отрицательная разница по кассе", "employee": e.full_name if e else str(s.employee_id), "shift_id": s.id, "amount": dec(r.cash_difference)} for s, e, r in cash_issues[:20]],
-                *[{"type": "critical_stock", "title": "Критический остаток", "inventory_id": i} for i in critical[:20]],
+                *[{"type": "critical_stock", "title": "Критический остаток", "inventory_id": balance.id, "product_id": product.id, "product": product.name, "quantity": dec(balance.quantity), "min_stock": dec(balance.min_stock)} for balance, product in critical[:20]],
             ],
         }
 
