@@ -23,6 +23,7 @@ from app.db.session import engine, SessionLocal
 from app.models.base import Base
 from app.models.smm import SMMAccess, SMMTask, SMMTaskRate
 from app.webapp.p0_routes import app as web_app
+import app.webapp.p0_finance  # register P0 financial bonus/salary/result routes
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
