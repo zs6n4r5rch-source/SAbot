@@ -65,6 +65,14 @@ async def main():
         await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena", web_app=WebAppInfo(url=settings.mini_app_url)))
 
     # /start is the canonical entry point and must run before legacy handlers.
+    # handlers.py still contains the legacy function for compatibility with the
+    # handler-surface check, but its /start registration is intentionally removed
+    # here so Telegram has exactly one active CommandStart handler.
+    router.message.handlers[:] = [
+        handler
+        for handler in router.message.handlers
+        if getattr(handler.callback, "__name__", None) != "start"
+    ]
     dp.include_router(start_router)
     dp.include_router(admin_delete_router)
     dp.include_router(owner_bonus_router)
