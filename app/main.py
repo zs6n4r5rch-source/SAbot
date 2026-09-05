@@ -12,6 +12,7 @@ from app.bot.admin_delete import router as admin_delete_router
 from app.bot.owner_bonus_menu import router as owner_bonus_router
 from app.bot.owner_data_menu import router as owner_data_router
 from app.bot.smm import router as smm_router
+from app.bot.start import router as start_router
 from app.bot.handlers import router
 from app.bot.shift_closing import router as shift_closing_router, shift_close_scheduler
 from app.bot.restart import router as restart_router
@@ -54,6 +55,8 @@ async def main():
     if settings.mini_app_url:
         await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena", web_app=WebAppInfo(url=settings.mini_app_url)))
 
+    # /start is the canonical entry point and must precede legacy handlers.
+    dp.include_router(start_router)
     dp.include_router(admin_delete_router)
     dp.include_router(owner_bonus_router)
     dp.include_router(owner_data_router)
