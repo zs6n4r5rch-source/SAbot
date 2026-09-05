@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -71,6 +71,16 @@ class MarketingCampaign(Base):
     created_by: Mapped[int] = mapped_column(BigInteger)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    confirmed_by: Mapped[int | None] = mapped_column(BigInteger)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MarketingCampaignGroup(Base):
+    __tablename__ = "marketing_campaign_groups"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("marketing_campaigns.id", ondelete="CASCADE"), index=True)
+    guest_group_id: Mapped[int] = mapped_column(ForeignKey("guest_groups.id", ondelete="CASCADE"), index=True)
+    __table_args__ = (UniqueConstraint("campaign_id", "guest_group_id"),)
 
 
 class MarketingRecipient(Base):
