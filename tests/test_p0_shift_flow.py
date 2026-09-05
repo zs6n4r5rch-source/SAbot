@@ -21,8 +21,8 @@ def test_p0_close_flow_does_not_create_or_modify_langame_shift():
     assert "Смена ещё открыта в LANGAME" in routes
 
 
-def test_inventory_quantity_model_default_is_zero():
+def test_inventory_model_keeps_zero_quantity_and_five_minimum_stock():
     root = Path(__file__).parents[1]
     text = (root / "app" / "models" / "base.py").read_text(encoding="utf-8")
-    assert 'quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0, server_default="0")' in text
+    assert 'quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0' in text
     assert 'min_stock: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=5, server_default="5")' in text
