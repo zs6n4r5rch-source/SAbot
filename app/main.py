@@ -11,8 +11,12 @@ from app.config import settings
 from app.bot.admin_delete import router as admin_delete_router
 from app.bot.owner_bonus_menu import router as owner_bonus_router
 from app.bot.owner_data_menu import router as owner_data_router
+from app.bot.mailing import router as mailing_router
 from app.bot.smm import router as smm_router
+from app.bot.inventory_quality import router as inventory_quality_router
+from app.bot.start import router as start_router
 from app.bot.handlers import router
+from app.bot.menu_state import MenuStateResetMiddleware
 from app.bot.shift_closing import router as shift_closing_router, shift_close_scheduler
 from app.bot.restart import router as restart_router
 from app.services.langame import langame_client
@@ -22,7 +26,10 @@ from app.services.telegram_webhook import router as telegram_webhook_router, set
 from app.db.session import engine, SessionLocal
 from app.models.base import Base
 from app.models.smm import SMMAccess, SMMTask, SMMTaskRate
-from app.webapp.app import app as web_app
+from app.webapp.p0_routes import app as web_app
+import app.webapp.p0_finance  # register P0 financial bonus/salary/result routes
+import app.webapp.p1_routes  # register P1 attention center and P2 IA UX routes
+import app.webapp.owner_routes  # register owner attention/settings UX and APIs
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
@@ -51,14 +58,23 @@ async def main():
     bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
 
+    # A stale FSM form must never consume a navigation button as numeric/text input.
+    dp.message.middleware(MenuStateResetMiddleware())
+
     if settings.mini_app_url:
         await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena", web_app=WebAppInfo(url=settings.mini_app_url)))
 
+    # /start is the canonical entry point and must run before legacy handlers.
+    dp.include_router(start_router)
     dp.include_router(admin_delete_router)
     dp.include_router(owner_bonus_router)
     dp.include_router(owner_data_router)
     dp.include_router(smm_router)
+    # These handlers intentionally precede the legacy inventory handlers so the
+    # user sees product names instead of raw/empty LANGAME product labels.
+    dp.include_router(inventory_quality_router)
     dp.include_router(router)
+    dp.include_router(mailing_router)
     dp.include_router(shift_closing_router)
     dp.include_router(restart_router)
     web_app.include_router(statistics_router)
@@ -78,21 +94,19 @@ async def main():
     report_task = asyncio.create_task(daily_report_scheduler(bot))
     shift_close_task = asyncio.create_task(shift_close_scheduler(bot))
     polling_lock = PollingLock()
-
     try:
-        logger.info("Starting Strike Arena bot (webhook=%s)...", webhook_mode)
+        await polling_lock.acquire()
         if webhook_mode:
-            await web_task
+            await asyncio.gather(web_task, report_task, shift_close_task)
         else:
-            await polling_lock.acquire()
             await dp.start_polling(bot)
     finally:
-        if not webhook_mode:
-            await polling_lock.release()
+        await polling_lock.release()
         web_server.should_exit = True
         if not web_task.done():
             await web_task
-        report_task.cancel(); shift_close_task.cancel()
+        report_task.cancel()
+        shift_close_task.cancel()
         for task in (report_task, shift_close_task):
             try:
                 await task

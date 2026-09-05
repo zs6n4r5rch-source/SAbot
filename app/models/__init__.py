@@ -1,22 +1,16 @@
 from app.models.base import (
     Base,
-
     UserRole,
-
     Club,
     Employee,
     EmployeeClub,
-
     TelegramUser,
     AccessProfile,
     TelegramBindingRequest,
-
     Shift,
     ShiftStatus,
-
     ProductCategory,
     Product,
-
     Inventory,
     InventoryItem,
     InventoryBalance,
@@ -24,105 +18,58 @@ from app.models.base import (
     InventoryOperationType,
     InventoryStatus,
     StockSnapshot,
-
     Writeoff,
     WriteoffItem,
     WriteoffStatus,
     WriteoffReason,
-
     Discrepancy,
     DiscrepancyStatus,
-
-    ShiftCloseReport,
-    ShiftCloseReportStatus,
-    ShiftCloseStockItem,
-
-    SalaryRule,
-    SalaryPeriod,
-    SalaryAdjustment,
-    SalaryViolation,
-    SalaryPayment,
-    NonMonetaryBonus,
-
+    AuditLog,
+    LangameSyncLog,
+)
+from app.models.owner import (
     Guest,
+    GuestTelegram,
     GuestGroup,
     GuestGroupMember,
-    GuestTelegram,
-    GuestLinkToken,
-
     MarketingCampaign,
     MarketingCampaignGroup,
     MarketingRecipient,
-    CampaignStatus,
-    RecipientStatus,
-
-    OwnerReportSettings,
     OwnerDailyReportDelivery,
-
-    AuditLog,
+    OwnerReportSettings,
 )
 
-
-__all__ = [
-    "Base",
-
-    "UserRole",
-
-    "Club",
-    "Employee",
-    "EmployeeClub",
-
-    "TelegramUser",
-    "AccessProfile",
-    "TelegramBindingRequest",
-
-    "Shift",
-    "ShiftStatus",
-
-    "ProductCategory",
-    "Product",
-
-    "Inventory",
-    "InventoryItem",
-    "InventoryBalance",
-    "InventoryOperation",
-    "InventoryOperationType",
-    "InventoryStatus",
-    "StockSnapshot",
-
-    "Writeoff",
-    "WriteoffItem",
-    "WriteoffStatus",
-    "WriteoffReason",
-
-    "Discrepancy",
-    "DiscrepancyStatus",
-
+_SALARY_EXPORTS = {
     "ShiftCloseReport",
     "ShiftCloseReportStatus",
     "ShiftCloseStockItem",
-
     "SalaryRule",
     "SalaryPeriod",
     "SalaryAdjustment",
     "SalaryViolation",
     "SalaryPayment",
     "NonMonetaryBonus",
+}
 
-    "Guest",
-    "GuestGroup",
-    "GuestGroupMember",
-    "GuestTelegram",
-    "GuestLinkToken",
 
-    "MarketingCampaign",
-    "MarketingCampaignGroup",
-    "MarketingRecipient",
-    "CampaignStatus",
-    "RecipientStatus",
+def __getattr__(name):
+    if name in _SALARY_EXPORTS:
+        from app.models import salary
+        return getattr(salary, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-    "OwnerReportSettings",
-    "OwnerDailyReportDelivery",
 
-    "AuditLog",
+__all__ = [
+    "Base", "UserRole", "Club", "Employee", "EmployeeClub", "TelegramUser",
+    "AccessProfile", "TelegramBindingRequest", "Shift", "ShiftStatus",
+    "ProductCategory", "Product", "Inventory", "InventoryItem", "InventoryBalance",
+    "InventoryOperation", "InventoryOperationType", "InventoryStatus", "StockSnapshot",
+    "Writeoff", "WriteoffItem", "WriteoffStatus", "WriteoffReason", "Discrepancy",
+    "DiscrepancyStatus", "AuditLog", "LangameSyncLog",
+    "Guest", "GuestTelegram", "GuestGroup", "GuestGroupMember",
+    "MarketingCampaign", "MarketingCampaignGroup", "MarketingRecipient",
+    "OwnerDailyReportDelivery", "OwnerReportSettings",
+    "ShiftCloseReport", "ShiftCloseReportStatus", "ShiftCloseStockItem",
+    "SalaryRule", "SalaryPeriod", "SalaryAdjustment", "SalaryViolation", "SalaryPayment",
+    "NonMonetaryBonus",
 ]
