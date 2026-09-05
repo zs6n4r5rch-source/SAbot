@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.bot.inventory import access
 from app.db.session import SessionLocal
-from app.models import Product
+from app.models.base import Product
 from app.services.langame import langame_client
 
 router = Router()
