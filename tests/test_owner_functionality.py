@@ -18,6 +18,7 @@ def test_owner_models_are_exported_for_web_daily_report_and_mailings():
 def test_owner_runtime_modules_import_without_model_registration_errors(monkeypatch):
     # The import test must not require a production database driver. Patch the
     # engine factory before importing the modules that create the DB session.
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test")
     monkeypatch.setenv("LANGAME_API_KEY", "ci-test-key")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123456:ci-test-token")
 
