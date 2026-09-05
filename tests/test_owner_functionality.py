@@ -3,9 +3,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_owner_models_are_exported_for_web_and_daily_report_flows():
+def test_owner_models_are_exported_for_web_daily_report_and_mailings():
     src = (ROOT / "app/models/__init__.py").read_text(encoding="utf-8")
-    assert "from app.models.owner import Guest, GuestTelegram, OwnerDailyReportDelivery, OwnerReportSettings" in src
+    assert "from app.models.owner import (" in src
+    assert '"GuestGroup"' in src
+    assert '"MarketingCampaign"' in src
+    assert '"MarketingRecipient"' in src
     assert '"OwnerReportSettings"' in src
     assert '"OwnerDailyReportDelivery"' in src
 
@@ -27,6 +30,12 @@ def test_owner_report_settings_can_be_saved_and_validated():
     assert "ZoneInfo(payload.timezone)" in src
     assert "cfg.report_timezone = payload.timezone" in src
     assert "cfg.send_excel = payload.send_excel" in src
+
+
+def test_owner_mailing_router_is_registered():
+    src = (ROOT / "app/main.py").read_text(encoding="utf-8")
+    assert "from app.bot.mailing import router as mailing_router" in src
+    assert "dp.include_router(mailing_router)" in src
 
 
 def test_owner_module_is_registered_after_ia_module():
