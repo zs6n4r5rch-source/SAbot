@@ -112,19 +112,28 @@ async def p1_p2_ux(request: Request, call_next):
   };
   window.home=async function(){
     await originalHome();
+    document.querySelectorAll('#root .section-title,#root .nav-card').forEach(x=>x.remove());
     try{
       const who=await api('/api/me');
-      if(who.role!=='owner') return;
-      const d=await api('/api/attention-center');
-      const count=Number(d.count||0);
-      const label=count?`Требует внимания · ${count}`:'Требует внимания';
-      const box=document.createElement('section');
-      box.className='card';
-      box.innerHTML=`<div class="section-title"><h2>🔴 ${label}</h2><span>центр действий</span></div><p class="muted">Нарушения, незакрытые отчёты, кассовые расхождения и критические остатки.</p><button class="primary" id="attention-home-btn">Открыть центр внимания</button><button class="secondary" id="owner-shifts-home-btn" style="margin-top:8px">Контроль смен</button>`;
-      root.appendChild(box);
-      document.getElementById('attention-home-btn').onclick=attention;
-      document.getElementById('owner-shifts-home-btn').onclick=ownerShifts;
-    }catch(e){}
+      if(who.role==='owner'){
+        const d=await api('/api/attention-center');
+        const count=Number(d.count||0);
+        const label=count?`Требует внимания · ${count}`:'Требует внимания';
+        const box=document.createElement('section');box.className='card';
+        box.innerHTML=`<div class="section-title"><h2>🔴 ${label}</h2><span>центр действий</span></div><p class="muted">Нарушения, незакрытые отчёты, кассовые расхождения и критические остатки.</p><button class="primary" id="attention-home-btn">Открыть центр внимания</button><button class="secondary" id="owner-shifts-home-btn" style="margin-top:8px">Контроль смен</button>`;
+        root.appendChild(box);
+        document.getElementById('attention-home-btn').onclick=attention;
+        document.getElementById('owner-shifts-home-btn').onclick=ownerShifts;
+      }else{
+        const sh=await api('/api/my-shift');
+        const state=sh.state==='open'?'Смена в работе':sh.state==='awaiting_report'?'Смена ждёт закрывающий отчёт':sh.state==='closed'?'Смена закрыта':'Смена не найдена';
+        const salary=await api('/api/my-salary/current');
+        const box=document.createElement('section');box.className='card';
+        box.innerHTML=`<div class="section-title"><h2>Моё состояние</h2><span>${state}</span></div><div class="row"><div class="row-main"><div class="row-title">Смена</div><div class="row-sub">${sh.started_at||'—'} → ${sh.ended_at||'сейчас'}</div></div><div class="row-value">${state}</div></div><div class="row"><div class="row-main"><div class="row-title">Зарплата за текущий период</div><div class="row-sub">Период ${salary.from} — ${salary.to}</div></div><div class="row-value">${money(salary.total)}</div></div><button class="primary" id="shift-home-btn">${sh.state==='open'?'Открыть смену':sh.state==='awaiting_report'?'Закрыть смену':'Посмотреть результат'}</button>`;
+        root.appendChild(box);
+        document.getElementById('shift-home-btn').onclick=sh.state==='awaiting_report'||sh.state==='open'?closeShift:shiftResult;
+      }
+    }catch(e){fail(e)}
   };
 })();
 </script>'''
