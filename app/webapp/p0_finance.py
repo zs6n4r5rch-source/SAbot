@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import math
 
@@ -29,7 +29,12 @@ def _admin(user):
 
 
 def _period_for_date(value):
-    return value.replace(day=1), (value.replace(day=1).replace(day=28) + __import__('datetime').timedelta(days=4)).replace(day=1) - __import__('datetime').timedelta(days=1)
+    date_from = value.replace(day=1)
+    if date_from.month == 12:
+        next_month = date(date_from.year + 1, 1, 1)
+    else:
+        next_month = date(date_from.year, date_from.month + 1, 1)
+    return date_from, next_month - timedelta(days=1)
 
 
 @app.post("/api/bonuses")
