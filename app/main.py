@@ -25,6 +25,7 @@ from app.models.smm import SMMAccess, SMMTask, SMMTaskRate
 from app.webapp.p0_routes import app as web_app
 import app.webapp.p0_finance  # register P0 financial bonus/salary/result routes
 import app.webapp.p1_routes  # register P1 attention center and P2 IA UX routes
+import app.webapp.owner_routes  # register owner attention/settings UX and APIs
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
