@@ -40,6 +40,27 @@ def test_p0_financial_and_result_routes_are_registered_and_fresh():
     assert "calculate_period" in routes
     assert "SalaryAdjustment" in routes
     assert "SalaryViolation" in routes
+    assert "shiftResult()" in routes
+    assert "Посмотреть результат и зарплату" in routes
+    assert "salary.total" in routes
     # Bonus, salary and result must refresh the local shift snapshot from LANGAME.
     assert routes.count("await sync_shifts_data()") >= 3
     assert "math.isfinite(payload.amount)" in routes
+
+
+def test_p0_manual_violation_is_linked_to_current_shift():
+    root = Path(__file__).parents[1]
+    penalties = (root / "app" / "bot" / "penalties.py").read_text(encoding="utf-8")
+    assert "select(Shift).where(" in penalties
+    assert "Shift.employee_id == employee_id" in penalties
+    assert "Shift.ended_at.is_(None)" in penalties
+    assert "shift_id=active_shift.id if active_shift else None" in penalties
+
+
+def test_p0_salary_applies_violation_financial_impact():
+    root = Path(__file__).parents[1]
+    salary = (root / "app" / "bot" / "salary.py").read_text(encoding="utf-8")
+    assert "fixed_penalties = sum" in salary
+    assert "bonus_total = positive_bonuses + negative_adjustments - fixed_penalties" in salary
+    assert "premium_reduction = any" in salary
+    assert "positive_bonuses = Decimal(\"0\")" in salary
