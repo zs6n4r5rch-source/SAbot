@@ -8,7 +8,7 @@ from app.db.session import SessionLocal
 async def ensure_bootstrap_owner(session, telegram_id: int):
     """Return/create an owner only when the Telegram ID is explicitly configured.
 
-    The old implementation promoted the first Telegram user to owner when the
+    The old implementation promoted the first user to owner when the
     database had no owners. That is unsafe in production: an unknown user must
     never gain owner privileges merely because the database is empty.
     """
