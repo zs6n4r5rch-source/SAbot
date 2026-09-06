@@ -194,7 +194,7 @@ class InventoryBalance(Base):
     __tablename__ = "inventory_balances"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"), index=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0, server_default="0")
     min_stock: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=5, server_default="5")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -297,7 +297,10 @@ class BonusRecord(Base):
     shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id"), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     reason: Mapped[str] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(String(64))
+    source_id: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    __table_args__ = (Index("ix_bonus_records_source", "source", "source_id", unique=True),)
 
 
 class AuditLog(Base):
