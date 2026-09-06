@@ -20,11 +20,12 @@ depends_on = None
 
 
 def upgrade():
-    # Change the schema contract first, then reconcile existing data to it.
+    # Keep the physical type aligned with 0021 and the ORM contract: Numeric(14, 3).
     op.alter_column(
         "inventory_balances",
         "min_stock",
-        existing_type=sa.Integer(),
+        existing_type=sa.Numeric(14, 3),
+        existing_nullable=False,
         server_default=sa.text("5"),
     )
     op.execute(
@@ -44,6 +45,7 @@ def downgrade():
     op.alter_column(
         "inventory_balances",
         "min_stock",
-        existing_type=sa.Integer(),
+        existing_type=sa.Numeric(14, 3),
+        existing_nullable=False,
         server_default=sa.text("0"),
     )
