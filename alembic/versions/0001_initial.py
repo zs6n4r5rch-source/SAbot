@@ -17,7 +17,7 @@ def upgrade():
             "clubs", "employees", "employee_clubs", "telegram_users", "shifts",
             "product_categories", "products", "langame_sync_log", "stock_snapshots",
             "inventory_balances", "inventory_operations", "writeoff_reasons", "writeoffs",
-            "writeoff_items", "inventories", "inventory_items", "discrepancies", "audit_log",
+            "writeoff_items", "inventories", "inventory_items", "discrepancies",
             "salary_rules", "salary_periods", "salary_adjustments", "salary_payments",
             "analytics_daily", "analytics_product_daily", "analytics_employee_daily",
         ]
@@ -29,7 +29,7 @@ def downgrade():
     bind = op.get_bind()
     for name in reversed([
         "analytics_employee_daily", "analytics_product_daily", "analytics_daily",
-        "salary_payments", "salary_adjustments", "salary_periods", "salary_rules", "audit_log",
+        "salary_payments", "salary_adjustments", "salary_periods", "salary_rules",
         "discrepancies", "inventory_items", "inventories", "writeoff_items", "writeoffs",
         "writeoff_reasons", "inventory_operations", "inventory_balances", "stock_snapshots",
         "langame_sync_log", "products", "product_categories", "shifts", "telegram_users",
