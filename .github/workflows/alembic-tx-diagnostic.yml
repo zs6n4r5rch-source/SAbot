@@ -1,0 +1,80 @@
+name: Alembic transaction diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sabot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sabot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/sabot
+      LANGAME_API_KEY: ci-test-key
+      TELEGRAM_BOT_TOKEN: "000000000:ci-test-token"
+      OWNER_TELEGRAM_IDS: "1"
+      LANGAME_READ_ONLY: "true"
+      SABOT_ALEMBIC_TX_DIAG: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -e .
+          pip check
+      - name: Run Alembic with transaction instrumentation
+        run: alembic upgrade head 2>&1 | tee alembic-tx.log
+      - name: Verify persisted migration state
+        run: |
+          python - <<'PY'
+          import asyncio
+          import os
+          import asyncpg
+
+          url = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
+
+          async def main():
+              conn = await asyncpg.connect(url)
+              try:
+                  version = await conn.fetchval("SELECT version_num FROM alembic_version")
+                  regclass = await conn.fetchval("SELECT to_regclass('inventory_balances')")
+                  default = await conn.fetchval("""
+                      SELECT column_default
+                      FROM information_schema.columns
+                      WHERE table_schema = 'public'
+                        AND table_name = 'inventory_balances'
+                        AND column_name = 'min_stock'
+                  """)
+                  print(f"CHECKPOINT version={version}")
+                  print(f"CHECKPOINT inventory_balances={regclass}")
+                  print(f"CHECKPOINT min_stock_default={default}")
+              finally:
+                  await conn.close()
+
+          asyncio.run(main())
+          PY
+      - name: Show transaction-only lines
+        if: always()
+        run: |
+          grep -E 'ALEMBIC_TX|BEGIN|COMMIT|ROLLBACK' alembic-tx.log || true
