@@ -1,6 +1,8 @@
 name: Alembic transaction diagnostic
 
 on:
+  push:
+    branches: [diag/alembic-tx-boundaries]
   workflow_dispatch:
 
 permissions:
