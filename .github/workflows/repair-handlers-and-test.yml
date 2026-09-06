@@ -53,6 +53,9 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q app tests
 
+      - name: Temporary diagnostic — min_stock checkpoints
+        run: bash scripts/diagnose_inventory_min_stock.sh
+
       - name: Run migrations on a fresh database
         run: alembic upgrade head
 
