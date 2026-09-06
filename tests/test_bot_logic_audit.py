@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_no_duplicate_exact_router_message_decorators():
+    """Detect duplicate handlers inside the same router module, not across Router instances."""
     seen = {}
     for p in (ROOT / 'app').rglob('*.py'):
         tree = ast.parse(p.read_text())
@@ -13,8 +14,8 @@ def test_no_duplicate_exact_router_message_decorators():
                 for d in n.decorator_list:
                     text = ast.unparse(d)
                     if text.startswith('router.message('):
-                        seen.setdefault(text, []).append((str(p), n.name))
-    dupes = {k:v for k,v in seen.items() if len(v)>1}
+                        seen.setdefault((str(p), text), []).append(n.name)
+    dupes = {f'{p}: {k}': v for (p, k), v in seen.items() if len(v) > 1}
     assert not dupes, dupes
 
 
