@@ -24,7 +24,6 @@ from app.models.base import (
     WriteoffReason,
     Discrepancy,
     DiscrepancyStatus,
-    SalaryViolation,
     BonusRecord,
     AuditLog,
     LangameSyncLog,
@@ -41,6 +40,18 @@ from app.models.guests import (
     MarketingCampaignGroup,
     MarketingRecipient,
 )
+from app.models.owner import OwnerDailyReportDelivery, OwnerReportSettings
+from app.models.salary import (
+    ShiftCloseReport,
+    ShiftCloseReportStatus,
+    ShiftCloseStockItem,
+    SalaryRule,
+    SalaryPeriod,
+    SalaryAdjustment,
+    SalaryViolation,
+    SalaryPayment,
+    NonMonetaryBonus,
+)
 
 
 __all__ = [
@@ -49,8 +60,12 @@ __all__ = [
     "ProductCategory", "Product", "Inventory", "InventoryItem", "InventoryBalance",
     "InventoryOperation", "InventoryOperationType", "InventoryStatus", "StockSnapshot",
     "Writeoff", "WriteoffItem", "WriteoffStatus", "WriteoffReason", "Discrepancy",
-    "DiscrepancyStatus", "SalaryViolation", "BonusRecord", "AuditLog", "LangameSyncLog",
+    "DiscrepancyStatus", "BonusRecord", "AuditLog", "LangameSyncLog",
     "CampaignStatus", "RecipientStatus",
     "Guest", "GuestGroup", "GuestGroupMember", "GuestTelegram", "GuestLinkToken",
     "MarketingCampaign", "MarketingCampaignGroup", "MarketingRecipient",
+    "OwnerDailyReportDelivery", "OwnerReportSettings",
+    "ShiftCloseReport", "ShiftCloseReportStatus", "ShiftCloseStockItem",
+    "SalaryRule", "SalaryPeriod", "SalaryAdjustment", "SalaryViolation", "SalaryPayment",
+    "NonMonetaryBonus",
 ]
