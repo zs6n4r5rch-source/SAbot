@@ -2,7 +2,7 @@ name: Min stock diagnostic
 
 on:
   push:
-    branches: [main, 'fix/**']
+    branches: [main, 'fix/**', 'diag/**']
   workflow_dispatch:
 
 permissions:
