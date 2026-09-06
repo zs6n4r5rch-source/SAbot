@@ -19,7 +19,6 @@ def upgrade():
             "inventory_balances", "inventory_operations", "writeoff_reasons", "writeoffs",
             "writeoff_items", "inventories", "inventory_items", "discrepancies",
             "salary_rules", "salary_periods", "salary_adjustments", "salary_payments",
-            "analytics_daily", "analytics_product_daily", "analytics_employee_daily",
         ]
     ])
 
@@ -28,7 +27,6 @@ def downgrade():
     from app.models import Base
     bind = op.get_bind()
     for name in reversed([
-        "analytics_employee_daily", "analytics_product_daily", "analytics_daily",
         "salary_payments", "salary_adjustments", "salary_periods", "salary_rules",
         "discrepancies", "inventory_items", "inventories", "writeoff_items", "writeoffs",
         "writeoff_reasons", "inventory_operations", "inventory_balances", "stock_snapshots",
