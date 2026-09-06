@@ -39,12 +39,17 @@ jobs:
           import ast
           from pathlib import Path
           src = Path('app/bot/handlers.py').read_text(encoding='utf-8')
+          start_src = Path('app/bot/start.py').read_text(encoding='utf-8')
           tree = ast.parse(src)
           funcs = {n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
-          required = {'start', 'admins', 'my_shifts', 'my_stats', 'is_owner', 'owner_menu_dispatch'}
+          required = {'admins', 'my_shifts', 'my_stats', 'is_owner', 'owner_menu_dispatch'}
           missing = required - funcs
           assert not missing, f'Missing handlers: {sorted(missing)}'
+          start_tree = ast.parse(start_src)
+          start_funcs = {n.name for n in ast.walk(start_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+          assert 'start_entry' in start_funcs, 'Canonical /start handler missing'
+          assert 'CommandStart()' in start_src, 'Canonical /start decorator missing'
           assert '"📅 Ежедневная сводка"' in src
           assert 'callback.from_user.id' in src
-          print('Handler surface OK:', ', '.join(sorted(required)))
+          print('Handler surface OK; canonical start_entry present')
           PY
