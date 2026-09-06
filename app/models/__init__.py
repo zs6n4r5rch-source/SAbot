@@ -52,6 +52,7 @@ from app.models.salary import (
     SalaryPayment,
     NonMonetaryBonus,
 )
+from app.models.smm import SMMAccess, SMMTaskRate, SMMTask
 
 
 __all__ = [
@@ -67,5 +68,5 @@ __all__ = [
     "OwnerDailyReportDelivery", "OwnerReportSettings",
     "ShiftCloseReport", "ShiftCloseReportStatus", "ShiftCloseStockItem",
     "SalaryRule", "SalaryPeriod", "SalaryAdjustment", "SalaryViolation", "SalaryPayment",
-    "NonMonetaryBonus",
+    "NonMonetaryBonus", "SMMAccess", "SMMTaskRate", "SMMTask",
 ]
