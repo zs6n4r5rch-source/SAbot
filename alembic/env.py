@@ -46,23 +46,6 @@ def _install_tx_event_listeners(sync_engine) -> None:
         print(f"EVENT rollback conn_id={id(conn)}", flush=True)
 
 
-async def run_async_migrations():
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-    _install_tx_event_listeners(connectable.sync_engine)
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-        print(
-            "ALEMBIC_TX before connection close: "
-            f"in_transaction={connection.in_transaction()}",
-            flush=True,
-        )
-    await connectable.dispose()
-
-
 def _tx_diag(connection: Connection, label: str) -> None:
     if os.getenv("SABOT_ALEMBIC_TX_DIAG") != "1":
         return
@@ -99,6 +82,9 @@ def do_run_migrations(connection: Connection):
     _tx_diag(connection, "after version CREATE")
     connection.execute(text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)"))
     _tx_diag(connection, "after version ALTER")
+    _tx_diag(connection, "before manual commit")
+    connection.commit()
+    _tx_diag(connection, "after manual commit")
     context.configure(connection=connection, target_metadata=target_metadata)
     _tx_diag(connection, "before context.begin_transaction")
     with context.begin_transaction():
@@ -106,6 +92,28 @@ def do_run_migrations(connection: Connection):
         context.run_migrations()
         _tx_diag(connection, "after context.run_migrations")
     _tx_diag(connection, "after context.begin_transaction")
+
+
+async def run_async_migrations():
+    connectable = async_engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    _install_tx_event_listeners(connectable.sync_engine)
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+        print(
+            "ALEMBIC_TX after run_sync returns: "
+            f"in_transaction={connection.in_transaction()}",
+            flush=True,
+        )
+        print(
+            "ALEMBIC_TX before connection close: "
+            f"in_transaction={connection.in_transaction()}",
+            flush=True,
+        )
+    await connectable.dispose()
 
 
 if context.is_offline_mode():
