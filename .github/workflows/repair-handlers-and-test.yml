@@ -2,7 +2,7 @@ name: Test
 
 on:
   push:
-    branches: [main, 'fix/**']
+    branches: [main, 'fix/**', 'diag/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -33,6 +33,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: "000000000:ci-test-token"
       OWNER_TELEGRAM_IDS: "1"
       LANGAME_READ_ONLY: "true"
+      SABOT_ALEMBIC_TX_DIAG: "1"
 
     steps:
       - name: Checkout
@@ -54,7 +55,7 @@ jobs:
         run: python -m compileall -q app tests
 
       - name: Run migrations on a fresh database
-        run: alembic upgrade head
+        run: alembic upgrade head 2>&1 | tee alembic-tx.log
 
       - name: Run full pytest suite
         run: pytest -q
@@ -79,3 +80,7 @@ jobs:
           assert 'callback.from_user.id' in src
           print('Handler surface OK; canonical start_entry present')
           PY
+
+      - name: Show transaction-only lines
+        if: always()
+        run: grep -E 'ALEMBIC_TX|BEGIN|COMMIT|ROLLBACK' alembic-tx.log || true
