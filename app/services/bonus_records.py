@@ -3,7 +3,6 @@ from __future__ import annotations
 from decimal import Decimal
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
 from app.models import BonusRecord, SalaryAdjustment, SalaryPeriod
 
@@ -37,20 +36,14 @@ async def sync_salary_adjustments_to_bonus_records(session, period: SalaryPeriod
         if existing.scalar_one_or_none() is not None:
             skipped += 1
             continue
-        record = BonusRecord(
+        session.add(BonusRecord(
             employee_id=period.employee_id,
             amount=Decimal(adjustment.amount),
             reason=adjustment.reason,
             source=source,
             source_id=source_id,
             created_at=adjustment.created_at,
-        )
-        session.add(record)
-        try:
-            await session.flush()
-        except IntegrityError:
-            await session.rollback()
-            skipped += 1
-        else:
-            created += 1
+        ))
+        await session.flush()
+        created += 1
     return created, skipped
