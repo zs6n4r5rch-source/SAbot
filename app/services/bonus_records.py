@@ -11,7 +11,7 @@ async def sync_salary_adjustments_to_bonus_records(session, period: SalaryPeriod
     """Materialize positive salary adjustments as idempotent monetary bonus records.
 
     Returns (created, skipped). The salary adjustment remains the source of truth;
-    BonusRecord is an auditable ledger projection keyed by adjustment id.
+    BonusRecord is an auditable ledger projection keyed by period + adjustment id.
     """
     if period.status not in {"confirmed", "paid"}:
         return 0, 0
@@ -26,7 +26,7 @@ async def sync_salary_adjustments_to_bonus_records(session, period: SalaryPeriod
     created = skipped = 0
     for adjustment in adjustments:
         source = "salary_adjustment"
-        source_id = str(adjustment.id)
+        source_id = f"{period.id}:{adjustment.id}"
         existing = await session.execute(
             select(BonusRecord.id).where(
                 BonusRecord.source == source,
