@@ -91,6 +91,7 @@ class SalaryAdjustment(Base):
 
 class SalaryViolation(Base):
     __tablename__ = "salary_violations"
+    __table_args__ = {"extend_existing": True}
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
     rule_code: Mapped[str] = mapped_column(String(80), index=True)
