@@ -23,8 +23,6 @@ from app.services.staff_access import ensure_real_staff_profiles
 from app.services.polling_lock import PollingLock
 from app.services.telegram_webhook import router as telegram_webhook_router, setup_webhook
 from app.db.session import engine, SessionLocal
-from app.models.base import Base
-from app.models.smm import SMMAccess, SMMTask, SMMTaskRate
 from app.webapp.app import app as web_app
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
@@ -33,11 +31,6 @@ from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)
-
-
-async def init_database():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
 
 async def provision_staff():
@@ -49,7 +42,6 @@ async def provision_staff():
 
 
 async def main():
-    await init_database()
     await provision_staff()
     bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
