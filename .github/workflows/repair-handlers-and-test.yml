@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -52,78 +52,6 @@ jobs:
 
       - name: Compile Python sources
         run: python -m compileall -q app tests
-
-      - name: Temporary diagnostic — min_stock checkpoints
-        run: |
-          set -euo pipefail
-          PGURL="$(printf '%s' "$DATABASE_URL" | sed 's#^postgresql+asyncpg://#postgresql://#')"
-          [[ "$PGURL" == postgresql://* ]] || { echo "Unsupported DATABASE_URL format"; exit 1; }
-          OUT="min-stock-diagnostic.txt"
-          : > "$OUT"
-          exec > >(tee -a "$OUT") 2>&1
-
-          echo "=== inventory_balances references in migration history ==="
-          grep -RniE 'inventory_balances|batch_alter_table|DROP TABLE|rename_table' alembic/versions/*.py || true
-
-          check_default() {
-            local label="$1"
-            echo "=== ${label} ==="
-            psql "$PGURL" -v ON_ERROR_STOP=1 -t -A -F '|' -c "
-              SELECT
-                COALESCE((
-                  SELECT 'present' FROM pg_tables
-                  WHERE schemaname = 'public' AND tablename = 'inventory_balances'
-                ), 'absent') AS table_state;
-
-              SELECT
-                COALESCE(c.column_default, '<no column>') AS column_default,
-                COALESCE(pg_get_expr(d.adbin, d.adrelid), '<no pg_attrdef>') AS pg_default_expr,
-                CASE WHEN d.oid IS NULL THEN 'no_pg_attrdef' ELSE 'has_pg_attrdef' END AS attrdef_state
-              FROM (SELECT 'inventory_balances'::text AS table_name, 'min_stock'::text AS column_name) target
-              LEFT JOIN information_schema.columns c
-                ON c.table_schema = 'public'
-               AND c.table_name = target.table_name
-               AND c.column_name = target.column_name
-              LEFT JOIN pg_namespace n
-                ON n.nspname = 'public'
-              LEFT JOIN pg_class cls
-                ON cls.relnamespace = n.oid
-               AND cls.relname = target.table_name
-              LEFT JOIN pg_attribute a
-                ON a.attrelid = cls.oid
-               AND a.attname = target.column_name
-               AND a.attnum > 0
-               AND NOT a.attisdropped
-              LEFT JOIN pg_attrdef d
-                ON d.adrelid = a.attrelid
-               AND d.adnum = a.attnum;
-            "
-          }
-
-          alembic upgrade 0001_initial
-          check_default "after 0001"
-          alembic upgrade 0021_inventory_min_stock_five
-          check_default "after 0021"
-          alembic upgrade 0024_bonus_record_source
-          check_default "after 0024"
-          alembic upgrade 0025_inventory_min_stock_reconciliation
-          check_default "after 0025"
-
-      - name: Upload temporary min_stock diagnostic
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: min-stock-diagnostic
-          path: min-stock-diagnostic.txt
-          retention-days: 1
-
-      - name: Post diagnostic as commit comment
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
-            -f "body=$(cat min-stock-diagnostic.txt)"
 
       - name: Run migrations on a fresh database
         run: alembic upgrade head
