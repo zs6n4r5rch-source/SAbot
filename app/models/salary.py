@@ -5,7 +5,7 @@ from enum import StrEnum
 from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, SalaryViolation
+from app.models.base import Base
 
 
 def utcnow() -> datetime:
@@ -87,6 +87,23 @@ class SalaryAdjustment(Base):
     reason: Mapped[str] = mapped_column(Text)
     created_by: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SalaryViolation(Base):
+    __tablename__ = "salary_violations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    rule_code: Mapped[str] = mapped_column(String(80), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, server_default="0")
+    source: Mapped[str] = mapped_column(String(20), default="manual", server_default="manual", index=True)
+    source_key: Mapped[str | None] = mapped_column(String(255), unique=True)
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id", ondelete="SET NULL"), index=True)
+    premium_reduction_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, server_default="0")
+    dismissal_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 class NonMonetaryBonus(Base):
