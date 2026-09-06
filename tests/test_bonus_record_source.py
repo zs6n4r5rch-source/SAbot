@@ -1,5 +1,3 @@
-from sqlalchemy import inspect
-
 from app.models import BonusRecord
 
 
