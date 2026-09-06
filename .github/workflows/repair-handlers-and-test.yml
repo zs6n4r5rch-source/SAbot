@@ -12,6 +12,26 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sabot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sabot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/sabot
+      LANGAME_API_KEY: ci-test-key
+      TELEGRAM_BOT_TOKEN: "000000000:ci-test-token"
+      OWNER_TELEGRAM_IDS: "1"
+      LANGAME_READ_ONLY: "true"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -29,6 +49,9 @@ jobs:
 
       - name: Compile Python sources
         run: python -m compileall -q app tests
+
+      - name: Run migrations on a fresh database
+        run: alembic upgrade head
 
       - name: Run full pytest suite
         run: pytest -q
