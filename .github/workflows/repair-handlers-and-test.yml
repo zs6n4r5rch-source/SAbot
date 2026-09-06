@@ -58,6 +58,9 @@ jobs:
           set -euo pipefail
           PGURL="$(printf '%s' "$DATABASE_URL" | sed 's#^postgresql+asyncpg://#postgresql://#')"
           [[ "$PGURL" == postgresql://* ]] || { echo "Unsupported DATABASE_URL format"; exit 1; }
+          OUT="min-stock-diagnostic.txt"
+          : > "$OUT"
+          exec > >(tee -a "$OUT") 2>&1
 
           echo "=== inventory_balances references in migration history ==="
           grep -RniE 'inventory_balances|batch_alter_table|DROP TABLE|rename_table' alembic/versions/*.py || true
@@ -105,6 +108,14 @@ jobs:
           check_default "after 0024"
           alembic upgrade 0025_inventory_min_stock_reconciliation
           check_default "after 0025"
+
+      - name: Upload temporary min_stock diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: min-stock-diagnostic
+          path: min-stock-diagnostic.txt
+          retention-days: 1
 
       - name: Run migrations on a fresh database
         run: alembic upgrade head
