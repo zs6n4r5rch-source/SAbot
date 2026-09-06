@@ -4,7 +4,7 @@ import logging
 import os
 
 from alembic import context
-from sqlalchemy import pool, text
+from sqlalchemy import event, pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -29,14 +29,37 @@ def run_migrations_offline():
         context.run_migrations()
 
 
+def _install_tx_event_listeners(sync_engine) -> None:
+    if os.getenv("SABOT_ALEMBIC_TX_DIAG") != "1":
+        return
+
+    @event.listens_for(sync_engine, "begin")
+    def on_begin(conn):
+        print(f"EVENT begin   conn_id={id(conn)}", flush=True)
+
+    @event.listens_for(sync_engine, "commit")
+    def on_commit(conn):
+        print(f"EVENT commit  conn_id={id(conn)}", flush=True)
+
+    @event.listens_for(sync_engine, "rollback")
+    def on_rollback(conn):
+        print(f"EVENT rollback conn_id={id(conn)}", flush=True)
+
+
 async def run_async_migrations():
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    _install_tx_event_listeners(connectable.sync_engine)
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
+        print(
+            "ALEMBIC_TX before connection close: "
+            f"in_transaction={connection.in_transaction()}",
+            flush=True,
+        )
     await connectable.dispose()
 
 
@@ -44,16 +67,27 @@ def _tx_diag(connection: Connection, label: str) -> None:
     if os.getenv("SABOT_ALEMBIC_TX_DIAG") != "1":
         return
     tx = connection.get_transaction()
-    print(f"ALEMBIC_TX {label}: in_transaction={connection.in_transaction()} tx_type={type(tx).__name__ if tx is not None else 'None'} tx_id={id(tx) if tx is not None else None}", flush=True)
+    print(
+        f"ALEMBIC_TX {label}: "
+        f"in_transaction={connection.in_transaction()} "
+        f"tx_type={type(tx).__name__ if tx is not None else 'None'} "
+        f"tx_id={id(tx) if tx is not None else None}",
+        flush=True,
+    )
 
 
 def _install_tx_log_filter() -> None:
     if os.getenv("SABOT_ALEMBIC_TX_DIAG") != "1":
         return
     logger = logging.getLogger("sqlalchemy.engine")
+
     class TxOnlyFilter(logging.Filter):
         def filter(self, record):
-            return any(kw in record.getMessage() for kw in ("BEGIN", "COMMIT", "ROLLBACK"))
+            return any(
+                kw in record.getMessage()
+                for kw in ("BEGIN", "COMMIT", "ROLLBACK")
+            )
+
     logger.setLevel(logging.INFO)
     logger.addFilter(TxOnlyFilter())
 
