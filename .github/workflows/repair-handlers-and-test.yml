@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -116,6 +116,14 @@ jobs:
           name: min-stock-diagnostic
           path: min-stock-diagnostic.txt
           retention-days: 1
+
+      - name: Post diagnostic as commit comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+            -f "body=$(cat min-stock-diagnostic.txt)"
 
       - name: Run migrations on a fresh database
         run: alembic upgrade head
