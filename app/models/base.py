@@ -290,17 +290,6 @@ class Discrepancy(Base):
     __table_args__ = (CheckConstraint("status IN ('open','reviewed','resolved')", name="ck_discrepancies_status"),)
 
 
-class SalaryViolation(Base):
-    __tablename__ = "salary_violations"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), index=True)
-    shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id"), index=True)
-    rule_code: Mapped[str] = mapped_column(String(64), index=True)
-    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
-    reason: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
-
-
 class BonusRecord(Base):
     __tablename__ = "bonus_records"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
