@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from aiogram import F, Router
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
@@ -213,7 +213,6 @@ async def owner_menu_dispatch(message: Message):
 langame = langame_client
 
 
-
 # подключение модулей
 from app.bot.inventory import router as inventory_router
 router.include_router(inventory_router)
@@ -258,11 +257,8 @@ from app.bot.owner_dashboard import router as owner_dashboard_router
 router.include_router(owner_dashboard_router)
 
 
-
 class AdminLinkState(StatesGroup):
-
     waiting_telegram_id = State()
-
     waiting_employee_id = State()
 
 
@@ -273,136 +269,49 @@ async def cancel_link(message: Message, state: FSMContext):
     await message.answer("❌ Операция отменена.")
 
 
-
-
 async def is_owner(message: Message):
-
     user = await get_access(message)
-
     return bool(
         user and
         user.role == UserRole.OWNER.value
     )
 
 
-
 async def deny(message: Message):
-
     await message.answer(
         "⛔ Доступ не настроен.\n"
         "Обратитесь к владельцу клуба."
     )
 
 
-
 @router.message(Command("myid"))
 async def my_id(message: Message):
-
     if not message.from_user:
         return
-
     await message.answer(
         f"Ваш Telegram ID:\n"
         f"<code>{message.from_user.id}</code>"
     )
 
 
-
-@router.message(CommandStart())
-async def start(message: Message):
-
-    from app.bot.staff_binding import process_staff_start
-
-
-    if await process_staff_start(message):
-        return
-
-
-
-    args = (
-        message.text or ""
-    ).split(maxsplit=1)
-
-
-
-    if (
-        len(args) == 2 and
-        args[1].startswith("guest_")
-    ):
-
-        from app.bot.guest import process_invite
-
-        await process_invite(
-            message,
-            args[1][6:]
-        )
-
-        return
-
-
-
-    user = await get_access(message)
-
-
-
-    if user is None:
-
-        await deny(message)
-
-        return
-
-
-
-    if user.role == UserRole.OWNER.value:
-
-        from app.bot.owner_dashboard import dashboard_text
-
-        await message.answer(
-            await dashboard_text(),
-            reply_markup=owner_inline_menu(settings.mini_app_url or None)
-        )
-
-    else:
-
-        await message.answer(
-            "Добро пожаловать, Administrator.",
-            reply_markup=admin_inline_menu(settings.mini_app_url or None)
-        )
-
-
-
 @router.message(F.text == "📋 Мои смены")
 async def my_shifts(message: Message):
-
     user = await get_access(message)
 
-
     if user is None:
-
         await deny(message)
-
         return
 
-
-
     if user.employee_id is None:
-
         await message.answer(
             "⚠️ Ваш Telegram не привязан к администратору."
         )
-
         return
 
-
-
     end = datetime.now(timezone.utc)
-
     start = end - timedelta(days=30)
 
-
-
     async with SessionLocal() as session:
-
         rows = (
             await session.execute(
                 select(
@@ -425,36 +334,23 @@ async def my_shifts(message: Message):
             )
         ).all()
 
-
-
     if not rows:
-
         await message.answer(
             "📋 Мои смены\n\n"
             "За последние 30 дней смен нет."
         )
-
         return
 
-
-
     total = Decimal("0")
-
     lines = [
         "📋 <b>Мои смены</b>",
         "Период: последние 30 дней",
         "",
     ]
 
-
-
     for shift, club in rows:
-
         hours = Decimal("0")
-
-
         if shift.ended_at:
-
             hours = Decimal(
                 str(
                     (
@@ -464,18 +360,12 @@ async def my_shifts(message: Message):
                 )
             ) / Decimal("3600")
 
-
-
         total += hours
-
-
         end_text = (
             shift.ended_at.strftime("%d.%m %H:%M")
             if shift.ended_at
             else "открыта"
         )
-
-
         lines.append(
             f"• {shift.started_at:%d.%m %H:%M} "
             f"— {end_text} "
@@ -483,51 +373,36 @@ async def my_shifts(message: Message):
             f"· {hours:.1f} ч"
         )
 
-
-
     lines += [
         "",
         f"Смен: <b>{len(rows)}</b>",
         f"Отработано: <b>{total:.1f} ч</b>",
     ]
 
-
-
     await message.answer(
         "\n".join(lines)
     )
 
+
 @router.message(F.text == "📊 Моя статистика")
 async def my_stats(message: Message):
-
     user = await get_access(message)
-
     if user is None:
         await deny(message)
         return
 
-
     if user.employee_id is None:
-
         await message.answer(
             "⚠️ Ваш Telegram не привязан к администратору."
         )
-
         return
-
-
 
     from app.bot.analytics import sales_rows
 
-
     end = datetime.now(timezone.utc)
-
     start = end - timedelta(days=30)
 
-
-
     async with SessionLocal() as session:
-
         shifts = (
             await session.execute(
                 select(Shift).where(
@@ -537,8 +412,6 @@ async def my_stats(message: Message):
                 )
             )
         ).scalars().all()
-
-
 
         writeoffs = await session.scalar(
             select(
@@ -564,8 +437,6 @@ async def my_stats(message: Message):
             )
         ) or 0
 
-
-
         discrepancies = await session.scalar(
             select(
                 func.count(
@@ -580,8 +451,6 @@ async def my_stats(message: Message):
             )
         ) or 0
 
-
-
         periods = (
             await session.execute(
                 select(SalaryPeriod).where(
@@ -595,36 +464,25 @@ async def my_stats(message: Message):
             )
         ).scalars().all()
 
-
-
     sales = Decimal("0")
     units = Decimal("0")
-
     shift_ids = {
         int(x.langame_shift_id)
         for x in shifts
         if x.langame_shift_id
     }
 
-
     try:
-
         for row in await sales_rows(start, end):
-
             if (
                 int(row.get("cancel", 0) or 0)
                 == 1
             ):
                 continue
-
-
             if row.get("working_shift_id") is None:
                 continue
-
-
             if int(row["working_shift_id"]) not in shift_ids:
                 continue
-
 
             qty = Decimal(
                 str(
@@ -634,8 +492,6 @@ async def my_stats(message: Message):
                     )
                 )
             )
-
-
             sales += (
                 Decimal(
                     str(
@@ -648,24 +504,13 @@ async def my_stats(message: Message):
                 *
                 qty
             )
-
-
             units += qty
-
-
     except Exception:
-
         pass
 
-
-
     hours = Decimal("0")
-
-
     for shift in shifts:
-
         if shift.ended_at:
-
             hours += Decimal(
                 str(
                     (
@@ -674,8 +519,6 @@ async def my_stats(message: Message):
                     ).total_seconds()
                 )
             ) / Decimal("3600")
-
-
 
     salary = sum(
         (
@@ -689,8 +532,6 @@ async def my_stats(message: Message):
         Decimal("0"),
     )
 
-
-
     await message.answer(
         "📊 <b>Моя статистика</b>\n\n"
         f"Смен: <b>{len(shifts)}</b>\n"
@@ -703,93 +544,58 @@ async def my_stats(message: Message):
     )
 
 
-
 @router.message(F.text == "👥 Администраторы")
 async def admins(message: Message):
-
     if not await is_owner(message):
         await deny(message)
         return
-
-
     await message.answer(
         "👥 <b>Администраторы</b>",
         reply_markup=admins_menu()
     )
 
 
-
 @router.message(F.text == "🔄 Синхронизировать LANGAME")
 async def sync_admins(message: Message):
-
     if not await is_owner(message):
         await deny(message)
         return
 
-
     try:
-
         page = 1
         users = []
-
-
         while True:
-
             result = await langame.users(
                 page=page,
                 page_limit=100,
             )
-
-
             batch = (
                 result.get("data")
                 or result.get("items")
                 or []
             )
-
-
             if not batch:
                 break
-
-
             users.extend(batch)
-
-
             total_pages = result.get(
                 "total_pages"
             )
-
-
             if (
                 not total_pages
                 or page >= int(total_pages)
             ):
                 break
-
-
             page += 1
-
-
 
         created = 0
         updated = 0
-
-
-
         async with SessionLocal() as session:
-
             for item in users:
-
                 if item.get("admin_status") is None:
                     continue
-
-
                 langame_id = item.get("id")
-
                 if langame_id is None:
                     continue
-
-
 
                 employee = (
                     await session.execute(
@@ -800,107 +606,71 @@ async def sync_admins(message: Message):
                     )
                 ).scalar_one_or_none()
 
-
-
                 if employee is None:
-
                     employee = Employee(
                         langame_user_id=
                         int(langame_id)
                     )
-
                     session.add(employee)
-
                     created += 1
-
                 else:
-
                     updated += 1
-
-
 
                 employee.full_name = (
                     item.get("username")
                     or item.get("email")
                 )
-
                 employee.phone = item.get("phone")
-
                 employee.active = bool(
                     item.get("verified")
                 )
 
-
-
             await match_admin_profiles_to_employees(
                 session
             )
-
-
             await session.commit()
-
-
 
         await message.answer(
             f"✅ Синхронизация завершена\n\n"
             f"Новых: {created}\n"
             f"Обновлено: {updated}"
         )
-
-
-
     except Exception as exc:
-
         await message.answer(
             f"❌ Ошибка LANGAME:\n{str(exc)[:300]}"
         )
 
 
-
 @router.message(F.text == "⚙️ Настройки")
 async def settings_menu(message: Message):
-
     if not await is_owner(message):
         await deny(message)
         return
-
-
     await message.answer(
         "⚙️ Настройки",
         reply_markup=owner_settings_menu()
     )
 
 
-
 @router.message(F.text == "↩️ Назад")
 async def back(message: Message):
-
     user = await get_access(message)
-
     print(
         "ACCESS DEBUG:",
         user.telegram_id if user else None,
         user.role if user else None,
         user.active if user else None
     )
-
     if user is None:
-
         await deny(message)
-
         return
 
-
-
     if user.role == UserRole.OWNER.value:
-
         await message.answer(
             "Главное меню",
             reply_markup=owner_menu()
         )
-
     else:
-
         await message.answer(
             "Главное меню",
             reply_markup=admin_menu()
