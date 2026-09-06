@@ -9,6 +9,7 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from app.config import settings
 from app.bot.admin_delete import router as admin_delete_router
+from app.bot.bonus_records import router as bonus_records_router
 from app.bot.inventory_quality import router as inventory_quality_router
 from app.bot.menu_state import MenuStateResetMiddleware
 from app.bot.owner_bonus_menu import router as owner_bonus_router
@@ -53,6 +54,7 @@ async def main():
     # /start is the canonical entry point and must precede legacy handlers.
     dp.include_router(start_router)
     dp.include_router(admin_delete_router)
+    dp.include_router(bonus_records_router)
     dp.include_router(owner_bonus_router)
     dp.include_router(owner_data_router)
     dp.include_router(smm_router)
