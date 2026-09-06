@@ -20,3 +20,8 @@ def test_langame_client_has_no_generic_write_path():
     assert "MUTATING_METHODS" in src
     assert "READ_ONLY_POST_PATHS" in src
     assert "LangameReadOnlyViolation" in src
+
+
+def test_legacy_bootstrap_owner_helper_is_removed():
+    matches = list((ROOT / "app").rglob("*.py"))
+    assert all("ensure_bootstrap_owner" not in path.read_text(encoding="utf-8") for path in matches)
