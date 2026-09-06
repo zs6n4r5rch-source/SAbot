@@ -32,7 +32,6 @@ async def run_async_migrations():
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        echo=True,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
