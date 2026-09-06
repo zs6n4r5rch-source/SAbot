@@ -2,7 +2,7 @@ name: Test
 
 on:
   push:
-    branches: [main, 'fix/**']
+    branches: [main, 'fix/**', 'diag/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -52,6 +52,9 @@ jobs:
 
       - name: Compile Python sources
         run: python -m compileall -q app tests
+
+      - name: Temporary diagnostic — min_stock transaction state
+        run: bash scripts/diagnose_inventory_transaction.sh
 
       - name: Run migrations on a fresh database
         run: alembic upgrade head
