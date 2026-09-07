@@ -27,6 +27,7 @@ from app.db.session import engine, SessionLocal
 from app.webapp.app import app as web_app
 from app.webapp.admin_shift_control import install as install_admin_shift_control
 from app.webapp.admin_shift_control_fix import apply as apply_admin_shift_control_fix
+from app.webapp.current_summary import install as install_current_summary
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
@@ -82,6 +83,7 @@ async def main():
     web_app.include_router(telegram_webhook_router)
     apply_admin_shift_control_fix()
     install_admin_shift_control(web_app)
+    install_current_summary(web_app)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
     if webhook_mode:
