@@ -200,9 +200,11 @@ async def statistics(request: Request, days: int | None = 30):
     ranking = await admins_ranking(None if period == "all" else int(period))
     sales = units = 0.0
     for r in rows:
-        if Number(r.get("cancel", 0)) == 1: continue
-        sales += Number(r.get("count", r.get("quantity", 0))) * Number(r.get("price_sale", r.get("price", 0)))
-        units += Number(r.get("count", r.get("quantity", 0)))
+        if float(r.get("cancel", 0) or 0) == 1: continue
+        quantity = float(r.get("count", r.get("quantity", 0)) or 0)
+        price = float(r.get("price_sale", r.get("price", 0)) or 0)
+        sales += quantity * price
+        units += quantity
     async with SessionLocal() as session:
         shifts_q = select(Shift, Employee).outerjoin(Employee, Employee.id == Shift.employee_id).where(Shift.started_at >= start).order_by(Shift.started_at.desc())
         shifts = (await session.execute(shifts_q)).all()
