@@ -197,4 +197,11 @@ def install(web_app):
     web_app.add_api_route("/api/current-summary", _current_summary, methods=["GET"], include_in_schema=False)
     web_app.add_api_route("/api/current-summary/guests", _group_guests, methods=["GET"], include_in_schema=False)
     web_app.add_api_route("/", _index, methods=["GET"], include_in_schema=False)
-    web_app.routes.sort(key=lambda route: 0 if isinstance(route, APIRoute) and route.path in {"/", "/api/current-summary", "/api/current-summary/guests"} and getattr(route.endpoint, "__name__", "") in {"_index", "_current_summary", "_group_guests"} else 1)
+    # The current-summary root page must be before the legacy admin root page.
+    # A shared sort key is not enough because both routes have the same path and
+    # endpoint name; the stable sort otherwise leaves admin_shift_control first.
+    for route in list(web_app.routes):
+        if isinstance(route, APIRoute) and route.path == "/" and route.endpoint is _index:
+            web_app.routes.remove(route)
+            web_app.routes.insert(0, route)
+            break
