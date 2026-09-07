@@ -1,0 +1,41 @@
+name: repair-owner-clients-v2
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch callback safely
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/bot/owner_data_menu.py')
+          s=p.read_text()
+          if 'client:noop:{gid}' not in s:
+              raise SystemExit('client callback marker not found')
+          s=s.replace('client:noop:{gid}', 'client:view:{gid}', 1)
+          start=s.find('@router.callback_query(F.data == "client:noop")')
+          if start < 0:
+              raise SystemExit('client noop handler marker not found')
+          end=s.find('\n\n# Compatibility layer', start)
+          if end < 0:
+              raise SystemExit('client handler end marker not found')
+          handler='''@router.callback_query(F.data.startswith("client:view:"))\nasync def client_view(call: CallbackQuery):\n    if not await is_owner(call):\n        await call.answer("Нет доступа", show_alert=True)\n        return\n    try:\n        guest_id = int(call.data.split(":", 2)[2])\n        data = await langame_client.guest_by_id(guest_id)\n        items = data.get("items") or data.get("data") or []\n        if isinstance(items, dict):\n            items = items.get("items") or items.get("data") or []\n        x = items[0] if items else {}\n        fio = x.get("fio") or x.get("name") or "Без имени"\n        phone = x.get("phone") or "—"\n        balance = x.get("balance")\n        bonus = x.get("bonus_balance")\n        blacklist = x.get("black_list")\n        text = (\n            f"👤 <b>{fio}</b>\\n\\n"\n            f"Телефон: {phone}\\n"\n            f"LANGAME ID: {guest_id}\\n"\n            f"Баланс: {balance if balance is not None else '—'}\\n"\n            f"Бонусы: {bonus if bonus is not None else '—'}\\n"\n            f"Чёрный список: {'да' if blacklist else 'нет'}"\n        )\n    except Exception as exc:\n        text = f"❌ Не удалось загрузить карточку клиента.\\n{str(exc)[:300]}"\n    await call.message.edit_text(text, reply_markup=owner_back())\n    await call.answer()\n'''
+          s=s[:start]+handler+s[end:]
+          p.write_text(s)
+          PY
+          python -m py_compile app/bot/owner_data_menu.py
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/bot/owner_data_menu.py
+          git commit -m 'fix: open owner client cards' || exit 0
+          git push
