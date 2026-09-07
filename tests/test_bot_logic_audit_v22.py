@@ -7,10 +7,11 @@ def test_cleaning_state_exists_before_transition():
     assert 'state.set_state(ShiftCloseState.waiting_cleaning)' in text
 
 
-def test_repeat_penalty_counts_prior_same_rule_regardless_of_source():
+def test_penalty_policy_has_no_legacy_repeat_source_filter():
     text = Path('app/bot/penalties.py').read_text()
-    assert 'SalaryViolation.employee_id == employee_id, SalaryViolation.rule_code == code)) if (repeat or code == \"insult_sa\") else 0' in text
     assert 'SalaryViolation.source == "manual"' not in text
+    assert 'SalaryViolation.employee_id == employee_id, SalaryViolation.rule_code == code)) if (repeat or code == "insult_sa") else 0' not in text
+
 
 def test_global_cancel_is_scoped_to_admin_link_fsm():
     text = Path('app/bot/handlers.py').read_text()
