@@ -24,14 +24,18 @@ async def start_entry(message: Message, state: FSMContext):
     user = await get_access(message)
     if user is not None:
         if user.role == "owner":
-            # Remove any legacy persistent reply keyboard so the owner sees
-            # the redesigned menu attached directly to this message.
-            await message.answer("", reply_markup=ReplyKeyboardRemove())
-            await message.answer(
+            text = (
                 "👑 <b>Панель владельца</b>\n\n"
                 "Главные показатели, контроль и управление клубом — прямо в Telegram.\n"
-                "Выберите нужный раздел ниже или откройте Strike Arena.",
-                reply_markup=owner_inline_menu(settings.mini_app_url or None),
+                "Выберите нужный раздел ниже или откройте Strike Arena."
+            )
+            # Telegram does not allow ReplyKeyboardRemove and an inline
+            # keyboard on the same message. Send the final text once with
+            # the legacy reply keyboard removed, then attach the redesigned
+            # inline menu to that same message.
+            sent = await message.answer(text, reply_markup=ReplyKeyboardRemove())
+            await sent.edit_reply_markup(
+                reply_markup=owner_inline_menu(settings.mini_app_url or None)
             )
         else:
             await message.answer(
