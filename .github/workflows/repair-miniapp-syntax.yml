@@ -1,0 +1,38 @@
+name: Repair Mini App syntax
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Fix syntax and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=app/webapp/static/index.html
+          grep -F "document.getElementById('newp').onclick=penaltyForm)}" "$file"
+          sed -i "s/document.getElementById('newp').onclick=penaltyForm)}/document.getElementById('newp').onclick=penaltyForm}/" "$file"
+          ! grep -F "document.getElementById('newp').onclick=penaltyForm)}" "$file"
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s = Path('app/webapp/static/index.html').read_text(encoding='utf-8')
+          js = re.search(r'<script>(.*?)</script>', s, re.S).group(1)
+          Path('/tmp/app.js').write_text(js, encoding='utf-8')
+          PY
+          node --check /tmp/app.js
+          rm -f .github/workflows/repair-miniapp-syntax.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/webapp/static/index.html .github/workflows/repair-miniapp-syntax.yml
+          git commit -m "fix: repair Mini App JavaScript syntax"
+          git push
