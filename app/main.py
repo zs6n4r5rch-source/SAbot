@@ -28,6 +28,7 @@ from app.webapp.app import app as web_app
 from app.webapp.admin_shift_control import install as install_admin_shift_control
 from app.webapp.admin_shift_control_fix import apply as apply_admin_shift_control_fix
 from app.webapp.current_summary import install as install_current_summary
+from app.webapp.current_summary_v2 import install as install_current_summary_v2
 from app.webapp.management_dashboard import install as install_management_dashboard
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
@@ -52,16 +53,9 @@ async def main():
     dp = Dispatcher()
     dp.message.middleware(MenuStateResetMiddleware())
 
-    await bot.set_my_commands([
-        BotCommand(command="start", description="Главное меню"),
-    ])
+    await bot.set_my_commands([BotCommand(command="start", description="Главное меню")])
     if settings.mini_app_url:
-        await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(
-                text="Strike Arena",
-                web_app=WebAppInfo(url=settings.mini_app_url.rstrip("/")),
-            )
-        )
+        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena", web_app=WebAppInfo(url=settings.mini_app_url.rstrip("/"))))
 
     dp.include_router(start_router)
     dp.include_router(admin_delete_router)
@@ -81,6 +75,7 @@ async def main():
     install_admin_shift_control(web_app)
     install_current_summary(web_app)
     install_management_dashboard(web_app)
+    install_current_summary_v2(web_app)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
     if webhook_mode:
