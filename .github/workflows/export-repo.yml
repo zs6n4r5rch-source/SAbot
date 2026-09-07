@@ -1,0 +1,28 @@
+name: Export repository ZIP
+
+on:
+  push:
+    branches: [export-dec7f7e7]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v6
+        with:
+          ref: dec7f7e7dfa02e6e31fbd5acd7fdd7da33904503
+          fetch-depth: 0
+
+      - name: Build ZIP
+        run: git archive --format=zip --output=SAbot-dec7f7e7dfa02e6e31fbd5acd7fdd7da33904503.zip dec7f7e7dfa02e6e31fbd5acd7fdd7da33904503
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAbot-dec7f7e7dfa02e6e31fbd5acd7fdd7da33904503
+          path: SAbot-dec7f7e7dfa02e6e31fbd5acd7fdd7da33904503.zip
+          retention-days: 7
