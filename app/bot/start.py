@@ -1,9 +1,9 @@
 from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardRemove
 
-from app.bot.keyboards import admin_menu, owner_menu
+from app.bot.inline_keyboards import admin_inline_menu, owner_inline_menu
 from app.config import settings
 from app.services.auth import get_access
 
@@ -24,17 +24,20 @@ async def start_entry(message: Message, state: FSMContext):
     user = await get_access(message)
     if user is not None:
         if user.role == "owner":
+            # Remove any legacy persistent reply keyboard so the owner sees
+            # the redesigned menu attached directly to this message.
+            await message.answer("", reply_markup=ReplyKeyboardRemove())
             await message.answer(
                 "👑 <b>Панель владельца</b>\n\n"
                 "Главные показатели, контроль и управление клубом — прямо в Telegram.\n"
-                "Для полного интерфейса откройте Strike Arena.",
-                reply_markup=owner_menu(settings.mini_app_url or None),
+                "Выберите нужный раздел ниже или откройте Strike Arena.",
+                reply_markup=owner_inline_menu(settings.mini_app_url or None),
             )
         else:
             await message.answer(
                 "👤 <b>Рабочий кабинет</b>\n\n"
                 "Откройте Strike Arena или выберите нужный раздел ниже.",
-                reply_markup=admin_menu(settings.mini_app_url or None),
+                reply_markup=admin_inline_menu(settings.mini_app_url or None),
             )
         return
 
