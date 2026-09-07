@@ -9,11 +9,9 @@ def owner_inline_menu(mini_app_url: str | None = None):
     """Primary owner menu shown directly under the bot message.
 
     Keep callback data stable because existing owner handlers route by it.
-    The layout is intentionally compact: one primary Mini App action followed
-    by grouped operational sections.
     """
     rows = [
-        [_btn("📅 Ежедневная сводка", "owner:daily"), _btn("🔔 Требует внимания", "owner:attention")],
+        [_btn("📅 Ежедневная сводка", "owner:dashboard"), _btn("🔔 Требует внимания", "owner:attention")],
         [_btn("📊 Аналитика", "owner:analytics"), _btn("💰 Финансы", "owner:finance")],
         [_btn("🍔 Бар и снеки", "owner:inventory"), _btn("👥 Клиенты", "owner:clients")],
         [_btn("👥 Администраторы", "owner:admins"), _btn("🏆 Бонусы", "owner:bonuses")],
