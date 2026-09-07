@@ -1,24 +1,37 @@
-from decimal import Decimal
 from pathlib import Path
 
 
-def test_penalty_catalog_contains_all_policy_codes():
+def test_penalty_catalog_contains_approved_fixed_policy_codes():
     text = Path("app/bot/penalties.py").read_text()
     for code in [
-        "smoking", "dirty_area", "guest_drinks", "uniform", "entrance_trash", "late_request",
-        "off_schedule_open", "cash_discipline", "strangers", "commercial_break", "secret_shopper",
-        "receipt_money", "discount_abuse", "insult_sa", "greeting", "collection_guest_number",
-        "telegram_report", "empty_fridge", "overflowing_bins", "sleeping_guest", "game_update",
-        "device_issue", "alcohol", "guest_table_trash", "pc_restore", "work_phone", "late_1h",
-        "sleeping_admin", "no_show",
+        "collection_guest_number", "telegram_report", "empty_fridge", "overflowing_bins", "sleeping_guest",
+        "dirty_area", "late_request", "greeting", "smoking", "guest_drinks", "uniform", "entrance_trash",
+        "cash_discipline", "secret_shopper", "game_update", "device_issue", "alcohol", "pc_restore",
+        "work_phone", "insult_sa", "strangers", "commercial_break", "late_1h", "sleeping_admin",
+        "discount_abuse", "no_show",
     ]:
         assert f'("{code}"' in text
 
 
-def test_premium_reduction_rules_are_not_fixed_money_penalties():
+def test_fixed_penalty_amounts_match_approved_policy():
     text = Path("app/bot/penalties.py").read_text()
-    assert '"receipt_money", "🧾 Деньги не внесены при выданном чеке", Decimal("0"), False, True' in text
-    assert '"discount_abuse", "🏷 Присвоение/злоупотребление через скидки, неверную цену и т.п.", Decimal("0"), False, True' in text
+    for code in [
+        "collection_guest_number", "telegram_report", "empty_fridge", "overflowing_bins", "sleeping_guest",
+        "dirty_area", "late_request", "greeting",
+    ]:
+        assert f'("{code}"' in text
+        assert 'Decimal("250")' in text
+    for code in [
+        "smoking", "guest_drinks", "uniform", "entrance_trash", "cash_discipline", "secret_shopper",
+        "game_update", "device_issue", "alcohol", "pc_restore", "work_phone", "insult_sa",
+    ]:
+        assert f'("{code}"' in text
+        assert 'Decimal("500")' in text
+    for code in ["strangers", "commercial_break", "late_1h", "sleeping_admin", "discount_abuse"]:
+        assert f'("{code}"' in text
+        assert 'Decimal("1000")' in text
+    assert '("no_show"' in text
+    assert 'Decimal("2000")' in text
 
 
 def test_fixed_shift_pay_remains_2000():
@@ -32,12 +45,10 @@ def test_automatic_late_report_penalty_is_deduplicated():
     assert 'SalaryViolation.source_key == source_key' in text
 
 
-def test_insult_sa_policy_is_500_first_and_dismissal_on_repeat():
+def test_insult_sa_policy_is_500_fixed_penalty():
     text = Path("app/bot/penalties.py").read_text()
-    assert '("insult_sa", "⚠️ Оскорбление сотрудников SA / поведение против стандартов клуба", Decimal("500"), False, False)' in text
-    assert 'is_repeat_dismissal = code == "insult_sa" and previous > 0' in text
-    assert 'dismissal_required=(premium or is_repeat_dismissal)' in text
-    assert 'premium_reduction_percent=100 if (premium or is_repeat_dismissal) else 0' in text
+    assert '("insult_sa", "Оскорбление сотрудников, гостей, поведение, не соответствующее стандартам клуба", Decimal("500"))' in text
+
 
 def test_penalty_back_callback_exists():
     text = Path("app/bot/penalties.py").read_text()
@@ -45,11 +56,10 @@ def test_penalty_back_callback_exists():
     assert 'reply_markup=admins_menu()' in text
 
 
-def test_manual_penalty_ui_selects_employee_before_rule_and_never_requests_employee_id():
+def test_manual_penalty_ui_selects_employee_before_rule():
     text = Path("app/bot/penalties.py").read_text()
-    assert 'callback_data=f"penalty_employee:{employee.id}"' in text
-    assert 'Технические ID сотрудника здесь не используются.' in text
-    assert 'Введите комментарий к нарушению. Одной строкой, без ID сотрудника.' in text
+    assert 'callback_data=f"penalty_employee:{e.id}"' in text
+    assert 'Выберите администратора:' in text
     assert 'EMPLOYEE_ID | комментарий' not in text
 
 
@@ -61,15 +71,10 @@ def test_manual_penalty_requires_confirmation_before_create():
     assert 'await create_manual_penalty(callback.from_user.id, employee_id, code, comment)' in text
 
 
-def test_manual_penalty_confirmation_shows_admin_rule_and_consequence():
+def test_manual_penalty_confirmation_shows_admin_rule_and_comment():
     text = Path("app/bot/penalties.py").read_text()
-    assert '👤 Администратор:' in text
-    assert '⚠️ Нарушение:' in text
-    assert '💰 Последствие:' in text
-    assert '📝 Комментарий:' in text
-
-
-def test_premium_rules_require_dismissal():
-    text = Path("app/bot/penalties.py").read_text()
-    assert 'dismissal_required=(premium or is_repeat_dismissal)' in text
-    assert '"100% премии за расчётный период + увольнение"' in text
+    assert '🧾 <b>Проверьте начисление</b>' in text
+    assert '👤 {data.get("penalty_employee_name")}' in text
+    assert '⚠️ {title}' in text
+    assert '💰 {amount:.0f} ₽' in text
+    assert '📝 {comment[:1000]}' in text
