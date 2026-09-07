@@ -24,7 +24,7 @@ def client_page(items):
         gid = x.get("guest_id") or x.get("id") or "?"
         fio = x.get("fio") or x.get("name") or "Без имени"
         phone = x.get("phone") or "—"
-        rows.append([InlineKeyboardButton(text=f"👤 {str(fio)[:30]} · {str(phone)[:18]}", callback_data=f"client:noop:{gid}")])
+        rows.append([InlineKeyboardButton(text=f"👤 {str(fio)[:30]} · {str(phone)[:18]}", callback_data=f"client:view:{gid}")])
     rows.append([InlineKeyboardButton(text="⬅️ Панель владельца", callback_data="nav:owner")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -118,9 +118,35 @@ async def owner_broadcast(call: CallbackQuery):
     await call.answer()
 
 
-@router.callback_query(F.data == "client:noop")
-async def client_noop(call: CallbackQuery):
-    await call.answer("Карточка клиента будет открыта отдельным экраном.")
+@router.callback_query(F.data.startswith("client:view:"))
+async def client_view(call: CallbackQuery):
+    if not await is_owner(call):
+        await call.answer("Нет доступа", show_alert=True)
+        return
+    try:
+        guest_id = int(call.data.split(":", 2)[2])
+        data = await langame_client.guest_by_id(guest_id)
+        items = data.get("items") or data.get("data") or []
+        if isinstance(items, dict):
+            items = items.get("items") or items.get("data") or []
+        x = items[0] if items else {}
+        fio = x.get("fio") or x.get("name") or "Без имени"
+        phone = x.get("phone") or "—"
+        balance = x.get("balance")
+        bonus = x.get("bonus_balance")
+        blacklist = x.get("black_list")
+        text = (
+            f"👤 <b>{fio}</b>\n\n"
+            f"Телефон: {phone}\n"
+            f"LANGAME ID: {guest_id}\n"
+            f"Баланс: {balance if balance is not None else '—'}\n"
+            f"Бонусы: {bonus if bonus is not None else '—'}\n"
+            f"Чёрный список: {'да' if blacklist else 'нет'}"
+        )
+    except Exception as exc:
+        text = f"❌ Не удалось загрузить карточку клиента.\n{str(exc)[:300]}"
+    await call.message.edit_text(text, reply_markup=owner_back())
+    await call.answer()
 
 
 # Compatibility layer for the old persistent OWNER ReplyKeyboard.
