@@ -60,7 +60,10 @@ def is_bar_product(row: dict, products: dict[str, dict]) -> bool:
     text = _text(row, products)
     if any(term in text for term in GAMING_TERMS):
         return False
-    return any(term in text for term in BAR_TERMS)
+    # /products/expense and /products/arrival are the LANGAME goods flows.
+    # Unknown goods are therefore treated as bar/snacks instead of being
+    # silently lost as "other" revenue.
+    return True
 
 
 def _qty(row: dict) -> Decimal:
@@ -79,7 +82,7 @@ def _sale_amount(row: dict) -> Decimal:
 
 def _arrival_amount(row: dict) -> Decimal:
     qty = _qty(row)
-    for key in ("price_purchase", "purchase_price", "price_arrival", "cost_price", "unit_price", "price"):
+    for key in ("price_fact", "price_purchase", "purchase_price", "price_arrival", "cost_price", "unit_price", "price"):
         if row.get(key) is not None:
             return _dec(row.get(key)) * qty
     for key in ("sum", "amount", "total", "cost"):
