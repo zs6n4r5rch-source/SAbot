@@ -29,6 +29,7 @@ from app.webapp.admin_shift_control import install as install_admin_shift_contro
 from app.webapp.admin_shift_control_fix import apply as apply_admin_shift_control_fix
 from app.webapp.current_summary import install as install_current_summary
 from app.webapp.current_summary_v2 import install as install_current_summary_v2
+from app.webapp.current_summary_v3 import install as install_current_summary_v3
 from app.webapp.management_dashboard import install as install_management_dashboard
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
@@ -76,6 +77,7 @@ async def main():
     install_current_summary(web_app)
     install_management_dashboard(web_app)
     install_current_summary_v2(web_app)
+    install_current_summary_v3(web_app)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
     if webhook_mode:
