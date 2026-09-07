@@ -27,6 +27,8 @@ from app.db.session import engine, SessionLocal
 from app.webapp.app import app as web_app
 from app.webapp.admin_shift_control import install as install_admin_shift_control
 from app.webapp.admin_shift_control_fix import apply as apply_admin_shift_control_fix
+from app.webapp.admin_penalties import install as install_admin_penalties
+from app.webapp.admin_penalties_ui import install as install_admin_penalties_ui
 from app.webapp.current_summary import install as install_current_summary
 from app.webapp.current_summary_v2 import install as install_current_summary_v2
 from app.webapp.current_summary_v3 import install as install_current_summary_v3
@@ -80,6 +82,8 @@ async def main():
     install_current_summary_v2(web_app)
     install_current_summary_v3(web_app)
     install_work_center_v3(web_app)
+    install_admin_penalties(web_app)
+    install_admin_penalties_ui(web_app)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
     if webhook_mode:
