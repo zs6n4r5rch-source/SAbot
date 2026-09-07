@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field
-from fastapi.responses import HTMLResponse
 from sqlalchemy import desc, select
 
 from app.db.session import SessionLocal
@@ -16,7 +15,7 @@ PENALTY_RULES = [
     ("P250-03", "Пустые места в холодильнике", 250),
     ("P250-04", "Переполненные мусорные ведра в течение 30 минут", 250),
     ("P250-05", "Спящий гость в течение 30 минут", 250),
-    ("P250-06", "Грязь/пыль на столах и рабочем месте администратора/барной стойке, посторонние предметы на столе администратора", 250),
+    ("P250-06", "Грязь/пыль на столах и рабочем месте администратора/барной стойке, посторонние предметы на столе администратора + мусор на столах гостей", 250),
     ("P250-07", "Несвоевременная заявка на замену ламп, туалетной бумаги, клининга и т. д.", 250),
     ("P250-08", "Невыполнение регламента по встрече гостя", 250),
     ("P500-01", "Курение сигарет вне специально отведённых мест", 500),
@@ -28,16 +27,15 @@ PENALTY_RULES = [
     ("P500-07", "Пропуск обновления игр", 500),
     ("P500-08", "Нерабочие устройства в течение суток без уведомления в рабочий чат и попытки решить через поддержку", 500),
     ("P500-09", "Алкогольные напитки у гостей", 500),
-    ("P500-10", "Мусор на столах гостей", 500),
-    ("P500-11", "Не поправленное компьютерное или PS-место в течение 30 минут", 500),
-    ("P500-12", "Нет ответа на рабочий телефон", 500),
-    ("P500-13", "Оскорбление сотрудников, гостей, поведение, не соответствующее стандартам клуба", 500),
+    ("P500-10", "Не поправленное компьютерное или PS-место в течение 30 минут", 500),
+    ("P500-11", "Нет ответа на рабочий телефон", 500),
+    ("P500-12", "Оскорбление сотрудников, гостей, поведение, не соответствующее стандартам клуба", 500),
     ("P1000-01", "Присутствие в помещении посторонних лиц в нерабочее время (не клиент)", 1000),
     ("P1000-02", "Перерыв в ведении коммерческой деятельности в рабочие часы (за исключением обеда)", 1000),
-    ("P1000-03", "Опоздание на час и более", 1000),
+    ("P1000-03", "Опоздание на час и более. Деньги идут админу с прошлой смены", 1000),
     ("P1000-04", "Сон на смене", 1000),
     ("P1000-05", "Присвоение денежных средств при использовании скидок, некорректным ценником и прочее", 1000),
-    ("P2000-01", "Не выход на смену", 2000),
+    ("P2000-01", "Не выход на смену. Деньги идут заменяющему администратору", 2000),
 ]
 RULES = {code: {"code": code, "title": title, "amount": amount} for code, title, amount in PENALTY_RULES}
 
@@ -59,8 +57,7 @@ async def employee_penalties(request: Request, employee_id: int, days: int = 365
     user, _ = await current_user(request)
     owner_required(user)
     days = min(max(days, 1), 3650)
-    start = datetime.now(timezone.utc).timestamp() - days * 86400
-    start_dt = datetime.fromtimestamp(start, tz=timezone.utc)
+    start_dt = datetime.now(timezone.utc) - __import__('datetime').timedelta(days=days)
     async with SessionLocal() as session:
         employee = await session.get(Employee, employee_id)
         if not employee:
@@ -114,15 +111,7 @@ async function adminPenaltyForm(id){clear();setBottom(false);back();const d=awai
 async function adminPenaltyConfirm(id,code){const d=await api('/api/penalty-rules');const r=(d.items||[]).find(x=>x.code===code);if(!r)return;const comment=prompt(`Штраф ${r.amount} ₽\n${r.title}\n\nКомментарий (необязательно):`,'');if(comment===null)return;try{await api('/api/admins/penalties',{method:'POST',body:JSON.stringify({employee_id:Number(id),rule_code:code,comment:comment||null})});alert('Штраф начислен');adminPenalties(id)}catch(e){fail(e)}}'''
 
 
-async def install_index():
-    return None
-
-
 def install(web_app):
     web_app.add_api_route("/api/penalty-rules", penalty_rules, methods=["GET"], include_in_schema=False)
     web_app.add_api_route("/api/admins/{employee_id}/penalties", employee_penalties, methods=["GET"], include_in_schema=False)
     web_app.add_api_route("/api/admins/penalties", create_penalty, methods=["POST"], include_in_schema=False)
-    for route in web_app.routes:
-        if isinstance(route, APIRoute) and route.path == "/":
-            break
-'''}
