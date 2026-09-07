@@ -15,9 +15,10 @@ def test_langame_client_has_no_generic_write_methods():
 
 def test_langame_request_gate_allows_only_reads_and_guest_search():
     source = CLIENT.read_text()
-    assert 'if normalized_method == "GET":' in source
-    assert 'normalized_method == "POST" and normalized_path in self.READ_ONLY_POST_PATHS' in source
-    assert "raise LangameReadOnlyViolation" in source
+    assert 'normalized_method = method.upper()' in source
+    assert 'normalized_path = path.split("?", 1)[0].rstrip("/") or "/"' in source
+    assert 'if normalized_method != "GET" and not (normalized_method == "POST" and normalized_path in self.READ_ONLY_POST_PATHS):' in source
+    assert 'raise LangameReadOnlyViolation' in source
     assert 'READ_ONLY_POST_PATHS = frozenset({"/guests/search"})' in source
 
 
