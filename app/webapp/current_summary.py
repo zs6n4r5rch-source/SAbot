@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
-from pathlib import Path
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.routing import APIRoute
 from sqlalchemy import desc, func, select
@@ -13,12 +12,9 @@ from app.models import (
     GuestGroup,
     GuestGroupMember,
     InventoryBalance,
-    Product,
-    ProductCategory,
     SalaryViolation,
     Shift,
     ShiftCloseReport,
-    TelegramUser,
 )
 from app.services.langame import LangameAPIError, langame_client
 from app.webapp.app import current_user, dec, iso, owner_required
@@ -54,7 +50,10 @@ async def _sales_today():
                 pid = int(p.get("id", p.get("product_id", p.get("langame_product_id"))))
             except (TypeError, ValueError):
                 continue
-            product_map[pid] = (str(p.get("name") or ""), str(p.get("category_name") or p.get("category") or ""))
+            product_map[pid] = (
+                str(p.get("name") or ""),
+                str(p.get("category_name") or p.get("category") or ""),
+            )
         rows = []
         page = 1
         while True:
@@ -81,7 +80,13 @@ async def _sales_today():
                 continue
             units += qty
             totals[_classify_sale(row, product_map)] += amount
-        return {"bar": totals["bar"], "gaming": totals["gaming"], "other": totals["other"], "units": units, "source": "langame"}
+        return {
+            "bar": totals["bar"],
+            "gaming": totals["gaming"],
+            "other": totals["other"],
+            "units": units,
+            "source": "langame",
+        }
     except (LangameAPIError, TypeError, ValueError):
         return {"bar": 0.0, "gaming": 0.0, "other": 0.0, "units": 0.0, "source": "unavailable"}
 
@@ -93,8 +98,10 @@ async def _current_summary(request: Request):
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     async with SessionLocal() as session:
         open_rows = (await session.execute(
-            select(Shift, Employee).outerjoin(Employee, Employee.id == Shift.employee_id)
-            .where(Shift.ended_at.is_(None)).order_by(Shift.started_at)
+            select(Shift, Employee)
+            .outerjoin(Employee, Employee.id == Shift.employee_id)
+            .where(Shift.ended_at.is_(None))
+            .order_by(Shift.started_at)
         )).all()
         reports = (await session.execute(
             select(ShiftCloseReport, Shift, Employee)
@@ -115,11 +122,9 @@ async def _current_summary(request: Request):
         group_rows = (await session.execute(
             select(GuestGroup.id, GuestGroup.name, func.count(GuestGroupMember.guest_id))
             .outerjoin(GuestGroupMember, GuestGroupMember.guest_group_id == GuestGroup.id)
-            .group_by(GuestGroup.id, GuestGroup.name).order_by(desc(func.count(GuestGroupMember.guest_id)), GuestGroup.name)
+            .group_by(GuestGroup.id, GuestGroup.name)
+            .order_by(desc(func.count(GuestGroupMember.guest_id)), GuestGroup.name)
         )).all()
-        open_writeoffs = await session.scalar(select(func.count()).select_from(InventoryBalance).where(
-            InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock
-        )) or 0
     sales = await _sales_today()
     open_shifts = []
     for shift, employee in open_rows:
@@ -137,12 +142,25 @@ async def _current_summary(request: Request):
     return {
         "updated_at": iso(now),
         "shifts": open_shifts,
-        "reports": {"submitted": reports_submitted, "pending": reports_pending, "open_without_report": reports_missing},
+        "reports": {
+            "submitted": reports_submitted,
+            "pending": reports_pending,
+            "open_without_report": reports_missing,
+        },
         "sales": sales,
-        "guests": {"total": guests_total, "groups": [{"id": gid, "name": name, "count": int(count or 0)} for gid, name, count in group_rows]},
-        "attention": {"critical_stock": int(critical_stock), "dismissal_required": int(pending_dismissals), "critical_total": int(critical_stock) + int(pending_dismissals)},
-        "note": "Количество гостей — локальная синхронизированная база. Текущее присутствие в клубе не выдумывается: доступный read-only API сейчас не предоставляет active guests.",
-        "open_writeoffs": int(open_writeoffs),
+        "guests": {
+            "total": guests_total,
+            "groups": [
+                {"id": gid, "name": name, "count": int(count or 0)}
+                for gid, name, count in group_rows
+            ],
+        },
+        "attention": {
+            "critical_stock": int(critical_stock),
+            "dismissal_required": int(pending_dismissals),
+            "critical_total": int(critical_stock) + int(pending_dismissals),
+        },
+        "note": "Количество гостей пока берётся из локальной синхронизированной базы; источник 'С активной сессией' из LANGAME будет подключён отдельно после подтверждения соответствующего read-only API endpoint.",
     }
 
 
@@ -151,14 +169,25 @@ async def _group_guests(request: Request, group_id: int):
     owner_required(user)
     async with SessionLocal() as session:
         rows = (await session.execute(
-            select(Guest, GuestGroup).join(GuestGroupMember, GuestGroupMember.guest_id == Guest.id)
+            select(Guest, GuestGroup)
+            .join(GuestGroupMember, GuestGroupMember.guest_id == Guest.id)
             .join(GuestGroup, GuestGroup.id == GuestGroupMember.guest_group_id)
-            .where(GuestGroup.id == group_id).order_by(Guest.fio).limit(100)
+            .where(GuestGroup.id == group_id)
+            .order_by(Guest.fio)
+            .limit(100)
         )).all()
-    return {"group": {"id": group_id, "name": rows[0][1].name if rows else "Группа"}, "items": [
-        {"id": g.id, "langame_guest_id": g.langame_guest_id, "fio": g.fio or "Без имени", "phone": g.phone or ""}
-        for g, _ in rows
-    ]}
+    return {
+        "group": {"id": group_id, "name": rows[0][1].name if rows else "Группа"},
+        "items": [
+            {
+                "id": g.id,
+                "langame_guest_id": g.langame_guest_id,
+                "fio": g.fio or "Без имени",
+                "phone": g.phone or "",
+            }
+            for g, _ in rows
+        ],
+    }
 
 
 JS = r'''<script>
@@ -167,7 +196,7 @@ const currentEsc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const currentFmtMoney=v=>Number(v||0).toLocaleString('ru-RU',{maximumFractionDigits:0})+' ₽';
 const currentFmtDuration=m=>{const h=Math.floor(Number(m||0)/60),mm=Number(m||0)%60;return h?`${h} ч ${mm} мин`:`${mm} мин`};
 async function currentGroupGuests(id){clear();setBottom(false);back();const d=await api(`/api/current-summary/guests?group_id=${Number(id)}`);const items=d.items||[];root.insertAdjacentHTML('beforeend',`<div class="section-title"><h2>${currentEsc(d.group.name)}</h2><span>${items.length}</span></div>${items.length?items.map(g=>`<section class="card"><div class="admin-name">${currentEsc(g.fio)}</div><div class="admin-meta">LANGAME #${currentEsc(g.langame_guest_id)}${g.phone?' · '+currentEsc(g.phone):''}</div></section>`).join(''):'<div class="empty">Гостей в этой группе нет</div>'}`)}
-async function home(){if(me?.role!=='owner')return legacyCurrentSummaryHome();clear();setBottom(true);const d=await api('/api/current-summary');document.getElementById('hello').textContent=`${me.display_name||'Пользователь'} · Владелец`;const shiftHtml=d.shifts.length?d.shifts.map(s=>`<div class="row"><div class="row-main"><div class="row-title">🟢 ${currentEsc(s.employee)}</div><div class="row-sub">На смене ${currentFmtDuration(s.duration_minutes)} · с ${new Date(s.started_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</div></div><div class="row-value">${currentFmtMoney(s.sales)}</div></div>`).join(''):'<div class="empty">Сейчас открытых смен нет</div>';const groups=(d.guests.groups||[]).slice(0,6).map(g=>`<button class="nav-btn" onclick="currentGroupGuests(${Number(g.id)})"><span class="nav-icon">👥</span><span class="nav-copy"><span class="nav-label">${currentEsc(g.name)}</span><span class="nav-hint">${g.count} гостей</span></span><span class="nav-arrow">›</span></button>`).join('');const attention=d.attention.critical_total;root.innerHTML=`<section class="hero"><div class="eyebrow">ТЕКУЩАЯ СВОДКА</div><div class="hero-title">Что происходит сейчас</div><div class="hero-sub">Смены, выручка, гости, отчёты и проблемы. Обновлено ${new Date(d.updated_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}.</div></section><div class="section-title"><h2>Сейчас на смене</h2><span>${d.shifts.length}</span></div><section class="card">${shiftHtml}</section><div class="grid"><section class="card"><div class="section-title"><h2>Выручка сегодня</h2></div>${row('Бар и снеки',currentFmtMoney(d.sales.bar))}${row('Игровое время',currentFmtMoney(d.sales.gaming))}${d.sales.other?row('Прочее',currentFmtMoney(d.sales.other)):''}<div class="row"><div class="row-main"><div class="row-title">Всего</div></div><div class="row-value">${currentFmtMoney(d.sales.bar+d.sales.gaming+d.sales.other)}</div></div></section><section class="card"><div class="section-title"><h2>Гости</h2><span>${d.guests.total}</span></div><div class="kpi-value">${d.guests.total}</div><div class="row-sub">Гости в синхронизированной базе</div></section></div><div class="section-title"><h2>Группы лояльности</h2><span>открыть список</span></div><div class="nav-card">${groups||'<div class="empty">Группы пока не синхронизированы</div>'}</div><div class="section-title"><h2>Смены и отчёты</h2><span>сегодня</span></div><section class="card">${row('Отчёты сданы',d.reports.submitted)}${row('Ожидают отчёта',d.reports.pending)}${row('Без отчёта / открытая смена',d.reports.open_without_report)}</section><div class="section-title"><h2>Требует внимания</h2><span>${attention}</span></div><section class="card">${row('Критические остатки',d.attention.critical_stock)}${row('Требуется решение по нарушениям',d.attention.dismissal_required)}${row('Критические позиции / проблемы',attention)}</section>`}
+async function home(){if(me?.role!=='owner')return legacyCurrentSummaryHome();clear();setBottom(true);const d=await api('/api/current-summary');document.getElementById('hello').textContent=`${me.display_name||'Пользователь'} · Владелец`;const shiftHtml=d.shifts.length?d.shifts.map(s=>`<div class="row"><div class="row-main"><div class="row-title">🟢 ${currentEsc(s.employee)}</div><div class="row-sub">На смене ${currentFmtDuration(s.duration_minutes)} · с ${new Date(s.started_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</div></div><div class="row-value">${currentFmtMoney(s.sales)}</div></div>`).join(''):'<div class="empty">Сейчас открытых смен нет</div>';const groups=(d.guests.groups||[]).slice(0,6).map(g=>`<button class="nav-btn" onclick="currentGroupGuests(${Number(g.id)})"><span class="nav-icon">👥</span><span class="nav-copy"><span class="nav-label">${currentEsc(g.name)}</span><span class="nav-hint">${g.count} гостей</span></span><span class="nav-arrow">›</span></button>`).join('');const attention=d.attention.critical_total;root.innerHTML=`<section class="hero"><div class="eyebrow">ТЕКУЩАЯ СВОДКА</div><div class="hero-title">Что происходит сейчас</div><div class="hero-sub">Смены, выручка, гости, отчёты и проблемы. Обновлено ${new Date(d.updated_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}.</div></section><div class="section-title"><h2>Сейчас на смене</h2><span>${d.shifts.length}</span></div><section class="card">${shiftHtml}</section><div class="grid"><section class="card"><div class="section-title"><h2>Выручка сегодня</h2></div>${row('Бар и снеки',currentFmtMoney(d.sales.bar))}${row('Игровое время',currentFmtMoney(d.sales.gaming))}${d.sales.other?row('Прочее',currentFmtMoney(d.sales.other)):''}<div class="row"><div class="row-main"><div class="row-title">Всего</div></div><div class="row-value">${currentFmtMoney(d.sales.bar+d.sales.gaming+d.sales.other)}</div></div></section><section class="card"><div class="section-title"><h2>Гости</h2><span>${d.guests.total}</span></div><div class="kpi-value">${d.guests.total}</div><div class="row-sub">Сейчас в клубе: источник LANGAME «С активной сессией»</div></section></div><div class="section-title"><h2>Группы лояльности</h2><span>открыть список</span></div><div class="nav-card">${groups||'<div class="empty">Группы пока не синхронизированы</div>'}</div><div class="section-title"><h2>Смены и отчёты</h2><span>сегодня</span></div><section class="card">${row('Отчёты сданы',d.reports.submitted)}${row('Ожидают отчёта',d.reports.pending)}${row('Без отчёта / открытая смена',d.reports.open_without_report)}</section><div class="section-title"><h2>Требует внимания</h2><span>${attention}</span></div><section class="card">${row('Критические остатки',d.attention.critical_stock)}${row('Требуется решение по нарушениям',d.attention.dismissal_required)}${row('Критические позиции / проблемы',attention)}</section>`}
 </script>'''
 
 
@@ -184,4 +213,3 @@ def install(web_app):
     web_app.add_api_route("/api/current-summary/guests", _group_guests, methods=["GET"], include_in_schema=False)
     web_app.add_api_route("/", _index, methods=["GET"], include_in_schema=False)
     web_app.routes.sort(key=lambda route: 0 if isinstance(route, APIRoute) and route.path in {"/", "/api/current-summary", "/api/current-summary/guests"} and getattr(route.endpoint, "__name__", "") in {"_index", "_current_summary", "_group_guests"} else 1)
-'''
