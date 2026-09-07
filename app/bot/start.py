@@ -25,13 +25,12 @@ async def start_entry(message: Message, state: FSMContext):
     if user is not None:
         if user.role == "owner":
             text = (
-                "👑 <b>Панель владельца</b>\n\n"
-                "Главные показатели, контроль и управление клубом — прямо в Telegram.\n"
-                "Выберите нужный раздел ниже или откройте Strike Arena."
+                "👑 <b>Strike Arena</b>\n\n"
+                "Панель владельца клуба — в одном приложении.\n"
+                "Откройте Strike Arena для сводки, клиентов, финансов, аналитики и управления."
             )
-            # Send the redesigned inline menu first so a legacy reply-keyboard
-            # cleanup can never prevent the new menu from appearing. Telegram
-            # requires reply-keyboard removal to be a separate message.
+            # Remove any legacy reply keyboard separately. Telegram does not
+            # allow ReplyKeyboardRemove and InlineKeyboardMarkup together.
             await message.answer(
                 text,
                 reply_markup=owner_inline_menu(settings.mini_app_url or None),
