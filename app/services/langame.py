@@ -26,21 +26,12 @@ class LangameClient:
     async def aclose(self) -> None:
         await self.client.aclose()
 
-    # LANGAME is deliberately used as a read-only source of truth.
-    # GET is the normal read path. The only POST allowed by the OpenAPI
-    # contract is /guests/search, which is a search operation and does not
-    # modify LANGAME data. Every other mutating HTTP method is blocked here.
     READ_ONLY_POST_PATHS = frozenset({"/guests/search"})
     MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
         normalized_method = method.upper()
         normalized_path = path.split("?", 1)[0].rstrip("/") or "/"
-
-        # Defense in depth: the client itself is the last gate before any
-        # request reaches LANGAME. Only GET and the explicitly allowlisted
-        # non-mutating search endpoint are permitted. Future code cannot
-        # accidentally add a PUT/PATCH/DELETE (or an arbitrary POST).
         if normalized_method == "GET":
             pass
         elif normalized_method == "POST" and normalized_path in self.READ_ONLY_POST_PATHS:
@@ -54,8 +45,7 @@ class LangameClient:
         except httpx.HTTPError as exc:
             raise LangameAPIError(f"LANGAME network error: {exc}") from exc
         if response.status_code >= 400:
-            detail = response.text[:1000]
-            raise LangameAPIError(f"LANGAME HTTP {response.status_code}: {detail}")
+            raise LangameAPIError(f"LANGAME HTTP {response.status_code}: {response.text[:1000]}")
         try:
             data = response.json()
         except ValueError as exc:
@@ -68,7 +58,6 @@ class LangameClient:
         return await self._request("GET", path, params=params)
 
     async def _read_only_post(self, path: str, json: dict) -> dict:
-        """POST endpoint explicitly classified as read-only by LANGAME API."""
         if path.rstrip("/") not in self.READ_ONLY_POST_PATHS:
             raise LangameReadOnlyViolation(f"POST endpoint is not allowlisted as read-only: {path}")
         return await self._request("POST", path, json=json)
@@ -81,6 +70,40 @@ class LangameClient:
 
     async def shifts(self, page: int = 1, page_limit: int = 100) -> dict:
         return await self._get("/working_shifts/list", {"page": page, "page_limit": page_limit})
+
+    async def guest_sessions(self, date_from: str | None = None, date_to: str | None = None, page: int = 1, page_limit: int = 500, guest_id: int | None = None) -> dict:
+        params = {"page": page, "page_limit": page_limit}
+        if date_from:
+            params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
+        if guest_id is not None:
+            params["guest_id"] = guest_id
+        return await self._get("/guests/sessions", params)
+
+    async def transactions(self, date_from: str | None = None, date_to: str | None = None, page: int = 1, page_limit: int = 500, type: int | None = None, pay_system: int | None = None) -> dict:
+        params = {"page": page, "page_limit": page_limit}
+        if date_from:
+            params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
+        if type is not None:
+            params["type"] = type
+        if pay_system is not None:
+            params["pay_system"] = pay_system
+        return await self._get("/transactions/list", params)
+
+    async def all_operations_log(self, date_from: str | None = None, date_to: str | None = None, page: int = 1, page_limit: int = 500, operation_type: str | None = None, operation_form: str | None = None) -> dict:
+        params = {"page": page, "page_limit": page_limit}
+        if date_from:
+            params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
+        if operation_type:
+            params["operation_type"] = operation_type
+        if operation_form:
+            params["operation_form"] = operation_form
+        return await self._get("/all_operations_log/list", params)
 
     async def products(self) -> dict:
         return await self._get("/products/list")
@@ -124,6 +147,4 @@ class LangameClient:
         return await self._read_only_post("/guests/search", payload)
 
 
-# One shared HTTP client per bot process. Feature modules alias this client so
-# we do not leak one AsyncClient per router.
 langame_client = LangameClient()
