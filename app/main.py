@@ -34,6 +34,7 @@ from app.webapp.management_dashboard import install as install_management_dashbo
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
+from app.webapp.work_center_v3 import install as install_work_center_v3
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
@@ -78,6 +79,7 @@ async def main():
     install_management_dashboard(web_app)
     install_current_summary_v2(web_app)
     install_current_summary_v3(web_app)
+    install_work_center_v3(web_app)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
     if webhook_mode:
