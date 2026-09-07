@@ -6,11 +6,11 @@ def _btn(text: str, callback: str):
 
 
 def owner_inline_menu(mini_app_url: str | None = None):
-    """Compact Telegram entry point for the Strike Arena owner console.
+    """Compact Telegram launcher for the Strike Arena owner console.
 
-    Telegram inline keyboards cannot carry the Mini App's custom visual theme,
-    so the chat UI stays intentionally compact while the branded experience is
-    opened with the primary Web App button.
+    Telegram chat buttons cannot reproduce the Mini App's custom visual theme.
+    The owner chat therefore exposes one clear entry point; the full owner
+    navigation lives inside the branded Strike Arena Mini App.
     """
     rows = []
     if mini_app_url:
@@ -21,14 +21,8 @@ def owner_inline_menu(mini_app_url: str | None = None):
                 web_app=WebAppInfo(url=base),
             )
         ])
-
-    rows.extend([
-        [_btn("📅 Сводка", "owner:dashboard"), _btn("🔔 Требует внимания", "owner:attention")],
-        [_btn("📊 Аналитика", "owner:analytics"), _btn("💰 Финансы", "owner:finance")],
-        [_btn("🍔 Бар и снеки", "owner:inventory"), _btn("👥 Клиенты", "owner:clients")],
-        [_btn("👥 Администраторы", "owner:admins"), _btn("🏆 Бонусы", "owner:bonuses")],
-        [_btn("📣 Рассылки", "owner:broadcast"), _btn("⚙️ Настройки", "owner:settings")],
-    ])
+    else:
+        rows.append([_btn("📊 Открыть панель владельца", "owner:dashboard")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
