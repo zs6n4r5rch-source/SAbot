@@ -1,20 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.services.langame import langame_client
 
-BAR_TERMS = (
-    "бар", "снек", "напит", "drink", "beverage", "coffee", "tea", "water",
-    "juice", "cola", "energy", "pizza", "burger", "hotdog", "sandwich",
-    "food", "dessert", "кофе", "чай", "вода", "сок", "кола", "энергет",
-    "лимонад", "пицц", "бургер", "хот-дог", "сэндвич", "десерт", "чипс",
-    "шоколад", "батончик", "печень", "лед", "ice",
-)
-GAMING_TERMS = (
-    "gaming", "game", "tariff", "hour", "rent", "pc", "vip", "computer",
-    "игров", "тариф", "час", "аренд", "компьют", "зал", "пакет игры",
-)
+MSK = ZoneInfo("Europe/Moscow")
+GAMING_TERMS = ("gaming", "game", "tariff", "hour", "rent", "pc", "vip", "computer", "игров", "тариф", "час", "аренд", "компьют", "зал", "пакет игры")
 
 
 def _dec(value: Any) -> Decimal:
@@ -24,9 +16,20 @@ def _dec(value: Any) -> Decimal:
         return Decimal("0")
 
 
-def _rows(payload: dict) -> list[dict]:
-    value = payload.get("data") or payload.get("items") or payload.get("results") or []
-    return value if isinstance(value, list) else []
+def _rows(payload) -> list[dict]:
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+    for key in ("data", "items", "results", "rows"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            nested = _rows(value)
+            if nested:
+                return nested
+    return []
 
 
 def _product_id(row: dict) -> str | None:
@@ -48,22 +51,12 @@ def _name(row: dict, products: dict[str, dict]) -> str:
 def _text(row: dict, products: dict[str, dict]) -> str:
     pid = _product_id(row) or ""
     product = products.get(pid, {})
-    values = [
-        row.get("name"), row.get("product_name"), row.get("goods_name"), row.get("category"),
-        row.get("category_name"), row.get("type"), product.get("name"), product.get("category"),
-        product.get("category_name"), product.get("type"),
-    ]
+    values = [row.get("name"), row.get("product_name"), row.get("goods_name"), row.get("category"), row.get("category_name"), row.get("type"), product.get("name"), product.get("category"), product.get("category_name"), product.get("type")]
     return " ".join(str(v or "") for v in values).lower()
 
 
 def is_bar_product(row: dict, products: dict[str, dict]) -> bool:
-    text = _text(row, products)
-    if any(term in text for term in GAMING_TERMS):
-        return False
-    # /products/expense and /products/arrival are the LANGAME goods flows.
-    # Unknown goods are therefore treated as bar/snacks instead of being
-    # silently lost as "other" revenue.
-    return True
+    return not any(term in _text(row, products) for term in GAMING_TERMS)
 
 
 def _qty(row: dict) -> Decimal:
@@ -91,47 +84,54 @@ def _arrival_amount(row: dict) -> Decimal:
     return Decimal("0")
 
 
+def _row_date(row: dict, *keys: str):
+    for key in keys:
+        value = row.get(key)
+        if not value:
+            continue
+        text = str(value)
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(MSK).date()
+        except ValueError:
+            try:
+                return datetime.strptime(text[:10], "%Y-%m-%d").date()
+            except ValueError:
+                continue
+    return None
+
+
 async def _product_map() -> dict[str, dict]:
     try:
         payload = await langame_client.products()
     except Exception:
         return {}
-    result: dict[str, dict] = {}
-    for row in _rows(payload):
-        if not isinstance(row, dict):
-            continue
-        pid = _product_id(row)
-        if pid:
-            result[pid] = row
-    return result
+    return {_product_id(row): row for row in _rows(payload) if isinstance(row, dict) and _product_id(row)}
 
 
 async def _all_sales(date_from: str, date_to: str) -> list[dict]:
-    rows: list[dict] = []
-    page = 1
-    while True:
+    rows, page = [], 1
+    while page <= 50:
         payload = await langame_client.product_sales(date_from, date_to, page=page, page_limit=500)
-        page_rows = _rows(payload)
-        if not page_rows:
+        batch = _rows(payload)
+        if not batch:
             break
-        rows.extend(page_rows)
-        total_pages = payload.get("total_pages")
+        rows.extend(batch)
+        total_pages = payload.get("total_pages") if isinstance(payload, dict) else None
         if not total_pages or page >= int(total_pages):
             break
         page += 1
     return rows
 
 
-async def _all_arrivals(date_from: str, date_to: str) -> list[dict]:
-    rows: list[dict] = []
-    page = 1
-    while True:
-        payload = await langame_client.product_arrivals(date_from, date_to, page=page, page_limit=500)
-        page_rows = _rows(payload)
-        if not page_rows:
+async def _all_arrivals() -> list[dict]:
+    rows, page = [], 1
+    while page <= 100:
+        payload = await langame_client.product_arrivals(page=page, page_limit=500)
+        batch = _rows(payload)
+        if not batch:
             break
-        rows.extend(page_rows)
-        total_pages = payload.get("total_pages")
+        rows.extend(batch)
+        total_pages = payload.get("total_pages") if isinstance(payload, dict) else None
         if not total_pages or page >= int(total_pages):
             break
         page += 1
@@ -139,12 +139,13 @@ async def _all_arrivals(date_from: str, date_to: str) -> list[dict]:
 
 
 async def report(start: datetime, end: datetime) -> dict:
-    date_from = start.astimezone(timezone.utc).strftime("%Y-%m-%d")
-    date_to = end.astimezone(timezone.utc).strftime("%Y-%m-%d")
+    local_start = start.astimezone(MSK)
+    local_end = end.astimezone(MSK)
+    date_from = local_start.date().isoformat()
+    date_to = local_end.date().isoformat()
     products = await _product_map()
     sales_rows = await _all_sales(date_from, date_to)
-    arrival_rows = await _all_arrivals(date_from, date_to)
-
+    arrival_rows = await _all_arrivals()
     sales = Decimal("0")
     sales_units = Decimal("0")
     purchases = Decimal("0")
@@ -153,6 +154,9 @@ async def report(start: datetime, end: datetime) -> dict:
 
     for row in sales_rows:
         if not isinstance(row, dict) or row.get("cancel"):
+            continue
+        row_date = _row_date(row, "date", "date_update")
+        if row_date and not (local_start.date() <= row_date <= local_end.date()):
             continue
         if not is_bar_product(row, products):
             continue
@@ -166,7 +170,12 @@ async def report(start: datetime, end: datetime) -> dict:
         item["revenue"] += amount
 
     for row in arrival_rows:
-        if not isinstance(row, dict) or not is_bar_product(row, products):
+        if not isinstance(row, dict):
+            continue
+        row_date = _row_date(row, "date_fact", "date", "date_update")
+        if row_date and not (local_start.date() <= row_date <= local_end.date()):
+            continue
+        if not is_bar_product(row, products):
             continue
         qty = _qty(row)
         amount = _arrival_amount(row)
@@ -177,26 +186,5 @@ async def report(start: datetime, end: datetime) -> dict:
         item["purchases"] += amount
         item["purchase_units"] += qty
 
-    products_out = []
-    for item in sorted(by_product.values(), key=lambda x: x["revenue"], reverse=True):
-        products_out.append({
-            "name": item["name"],
-            "sold_units": float(item["sold_units"]),
-            "revenue": float(item["revenue"]),
-            "purchase_units": float(item["purchase_units"]),
-            "purchases": float(item["purchases"]),
-            "profit": float(item["revenue"] - item["purchases"]),
-        })
-
-    return {
-        "from": start.isoformat(),
-        "to": end.isoformat(),
-        "sales": float(sales),
-        "sales_units": float(sales_units),
-        "purchases": float(purchases),
-        "purchase_units": float(purchase_units),
-        "profit": float(sales - purchases),
-        "products": products_out[:100],
-        "source": "LANGAME products/expense + products/arrival",
-        "purchase_basis": "Приходы за выбранный период",
-    }
+    products_out = [{"name": item["name"], "sold_units": float(item["sold_units"]), "revenue": float(item["revenue"]), "purchase_units": float(item["purchase_units"]), "purchases": float(item["purchases"]), "profit": float(item["revenue"] - item["purchases"])} for item in sorted(by_product.values(), key=lambda x: x["revenue"], reverse=True)]
+    return {"from": start.isoformat(), "to": end.isoformat(), "sales": float(sales), "sales_units": float(sales_units), "purchases": float(purchases), "purchase_units": float(purchase_units), "profit": float(sales - purchases), "products": products_out[:100], "source": "LANGAME products/expense + products/arrival", "purchase_basis": "Приходы за выбранный период по date_fact"}
