@@ -5,7 +5,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import MenuButtonWebApp, WebAppInfo
+from aiogram.types import BotCommand, MenuButtonCommands
 
 from app.config import settings
 from app.bot.admin_delete import router as admin_delete_router
@@ -48,8 +48,12 @@ async def main():
     dp = Dispatcher()
     dp.message.middleware(MenuStateResetMiddleware())
 
-    if settings.mini_app_url:
-        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena", web_app=WebAppInfo(url=settings.mini_app_url)))
+    # Native Telegram menu: tapping the bot menu exposes /start as
+    # "Главное меню", so the owner can return home without typing /start.
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Главное меню"),
+    ])
+    await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
     # /start is the canonical entry point and must precede legacy handlers.
     dp.include_router(start_router)
