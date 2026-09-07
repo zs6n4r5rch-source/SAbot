@@ -5,13 +5,15 @@ check_default() {
   local label="$1"
   echo "=== ${label} ==="
   python - <<'PY'
+import asyncio
 import os
-import psycopg
+import asyncpg
 
-url = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://", 1)
-with psycopg.connect(url) as conn:
-    with conn.cursor() as cur:
-        cur.execute("""
+async def main():
+    url = os.environ["DATABASE_URL"]
+    conn = await asyncpg.connect(url)
+    try:
+        row = await conn.fetchrow("""
             SELECT
                 c.column_default,
                 pg_get_expr(d.adbin, d.adrelid) AS pg_default_expr
@@ -26,8 +28,11 @@ with psycopg.connect(url) as conn:
               AND c.table_name = 'inventory_balances'
               AND c.column_name = 'min_stock'
         """)
-        row = cur.fetchone()
-        print({"column_default": row[0], "pg_default_expr": row[1]})
+        print({"column_default": row["column_default"], "pg_default_expr": row["pg_default_expr"]})
+    finally:
+        await conn.close()
+
+asyncio.run(main())
 PY
 }
 
