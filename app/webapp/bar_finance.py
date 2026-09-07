@@ -17,13 +17,13 @@ def _dec(value: Any) -> Decimal:
 
 def _rows(payload) -> list[dict]:
     if isinstance(payload, list):
-        return [r for r in payload if isinstance(r, dict)]
+        return payload
     if not isinstance(payload, dict):
         return []
     for key in ("data", "items", "results", "rows"):
         value = payload.get(key)
         if isinstance(value, list):
-            return [r for r in value if isinstance(r, dict)]
+            return value
         if isinstance(value, dict):
             nested = _rows(value)
             if nested:
@@ -79,8 +79,7 @@ def _row_date(row: dict, *keys: str):
             continue
         text = str(value)
         try:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-            return (parsed.astimezone(MSK) if parsed.tzinfo else parsed.replace(tzinfo=MSK)).date()
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(MSK).date()
         except ValueError:
             try:
                 return datetime.strptime(text[:10], "%Y-%m-%d").date()
@@ -90,13 +89,15 @@ def _row_date(row: dict, *keys: str):
 
 
 async def _product_map() -> dict[str, dict]:
-    payload = await langame_client.products()
-    return {_product_id(row): row for row in _rows(payload) if _product_id(row)}
+    try:
+        payload = await langame_client.products()
+    except Exception:
+        return {}
+    return {_product_id(row): row for row in _rows(payload) if isinstance(row, dict) and _product_id(row)}
 
 
 async def _all_sales(date_from: str, date_to: str) -> list[dict]:
-    rows: list[dict] = []
-    page = 1
+    rows, page = [], 1
     while page <= 50:
         payload = await langame_client.product_sales(date_from, date_to, page=page, page_limit=500)
         batch = _rows(payload)
@@ -110,11 +111,10 @@ async def _all_sales(date_from: str, date_to: str) -> list[dict]:
     return rows
 
 
-async def _all_arrivals() -> list[dict]:
-    rows: list[dict] = []
-    page = 1
-    while page <= 100:
-        payload = await langame_client.product_arrivals(page=page, page_limit=500)
+async def _all_arrivals(date_from: str, date_to: str) -> list[dict]:
+    rows, page = [], 1
+    while page <= 50:
+        payload = await langame_client.product_arrivals(date_from, date_to, page=page, page_limit=500)
         batch = _rows(payload)
         if not batch:
             break
@@ -131,74 +131,38 @@ async def report(start: datetime, end: datetime) -> dict:
     local_end = end.astimezone(MSK)
     date_from = local_start.date().isoformat()
     date_to = local_end.date().isoformat()
-
     products = await _product_map()
     sales_rows = await _all_sales(date_from, date_to)
-    arrival_rows = await _all_arrivals()
-
+    arrival_rows = await _all_arrivals(date_from, date_to)
     sales = Decimal("0")
     sales_units = Decimal("0")
     purchases = Decimal("0")
     purchase_units = Decimal("0")
     by_product: dict[str, dict[str, Any]] = {}
 
-    def item_for(row: dict) -> dict[str, Any]:
-        pid = _product_id(row) or _name(row, products)
-        return by_product.setdefault(pid, {
-            "name": _name(row, products),
-            "sold_units": Decimal("0"),
-            "revenue": Decimal("0"),
-            "purchases": Decimal("0"),
-            "purchase_units": Decimal("0"),
-        })
-
     for row in sales_rows:
-        if row.get("cancel"):
-            continue
-        row_date = _row_date(row, "date", "date_update")
-        if row_date and not (local_start.date() <= row_date <= local_end.date()):
+        if not isinstance(row, dict) or row.get("cancel"):
             continue
         qty = _qty(row)
         amount = _sale_amount(row)
         sales += amount
         sales_units += qty
-        item = item_for(row)
+        pid = _product_id(row) or _name(row, products)
+        item = by_product.setdefault(pid, {"name": _name(row, products), "sold_units": Decimal("0"), "revenue": Decimal("0"), "purchases": Decimal("0"), "purchase_units": Decimal("0")})
         item["sold_units"] += qty
         item["revenue"] += amount
 
     for row in arrival_rows:
-        row_date = _row_date(row, "date_fact", "date", "date_update")
-        if row_date and not (local_start.date() <= row_date <= local_end.date()):
+        if not isinstance(row, dict):
             continue
         qty = _qty(row)
         amount = _arrival_amount(row)
         purchases += amount
         purchase_units += qty
-        item = item_for(row)
+        pid = _product_id(row) or _name(row, products)
+        item = by_product.setdefault(pid, {"name": _name(row, products), "sold_units": Decimal("0"), "revenue": Decimal("0"), "purchases": Decimal("0"), "purchase_units": Decimal("0")})
         item["purchases"] += amount
         item["purchase_units"] += qty
 
-    products_out = [
-        {
-            "name": item["name"],
-            "sold_units": float(item["sold_units"]),
-            "revenue": float(item["revenue"]),
-            "purchase_units": float(item["purchase_units"]),
-            "purchases": float(item["purchases"]),
-            "profit": float(item["revenue"] - item["purchases"]),
-        }
-        for item in sorted(by_product.values(), key=lambda x: x["revenue"], reverse=True)
-    ]
-
-    return {
-        "from": start.isoformat(),
-        "to": end.isoformat(),
-        "sales": float(sales),
-        "sales_units": float(sales_units),
-        "purchases": float(purchases),
-        "purchase_units": float(purchase_units),
-        "profit": float(sales - purchases),
-        "products": products_out[:100],
-        "source": "LANGAME products/expense + products/arrival",
-        "purchase_basis": "Приходы за выбранный период по date_fact",
-    }
+    products_out = [{"name": item["name"], "sold_units": float(item["sold_units"]), "revenue": float(item["revenue"]), "purchase_units": float(item["purchase_units"]), "purchases": float(item["purchases"]), "profit": float(item["revenue"] - item["purchases"])} for item in sorted(by_product.values(), key=lambda x: x["revenue"], reverse=True)]
+    return {"from": start.isoformat(), "to": end.isoformat(), "sales": float(sales), "sales_units": float(sales_units), "purchases": float(purchases), "purchase_units": float(purchase_units), "profit": float(sales - purchases), "products": products_out[:100], "source": "LANGAME products/expense + products/arrival", "purchase_basis": "Приходы за выбранный период"}
