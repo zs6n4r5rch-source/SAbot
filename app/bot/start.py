@@ -1,7 +1,7 @@
 from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import Message
 
 from app.bot.inline_keyboards import admin_inline_menu, owner_inline_menu
 from app.config import settings
@@ -29,17 +29,13 @@ async def start_entry(message: Message, state: FSMContext):
                 "Панель владельца клуба — в одном приложении.\n"
                 "Откройте Strike Arena для сводки, клиентов, финансов, аналитики и управления."
             )
-            # Remove any legacy reply keyboard separately. Telegram does not
-            # allow ReplyKeyboardRemove and InlineKeyboardMarkup together.
+            # The owner launcher is intentionally a single inline Web App button.
+            # Do not send the old ReplyKeyboardRemove cleanup message here: on
+            # Telegram it can fail with "text must be non-empty" and break /start.
             await message.answer(
                 text,
                 reply_markup=owner_inline_menu(settings.mini_app_url or None),
             )
-            cleanup = await message.answer("\u200b", reply_markup=ReplyKeyboardRemove())
-            try:
-                await cleanup.delete()
-            except Exception:
-                pass
         else:
             await message.answer(
                 "👤 <b>Рабочий кабинет</b>\n\n"
