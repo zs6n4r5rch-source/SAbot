@@ -161,6 +161,23 @@ async def inventory(request: Request):
         return {"items": [{"id": b.id, "club": c.name, "product": p.name, "quantity": dec(b.quantity), "min_stock": dec(b.min_stock), "critical": bool(b.min_stock > 0 and b.quantity <= b.min_stock), "updated_at": iso(b.updated_at)} for b, p, c in rows]}
 
 
+@app.get("/api/bar-finance")
+async def bar_finance(request: Request, days: int = 30):
+    user, _ = await current_user(request)
+    owner_required(user)
+    days = min(max(days, 1), 3650)
+    end = datetime.now(timezone.utc)
+    if days == 1:
+        start = end.replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start = end - timedelta(days=days)
+    from app.webapp.bar_finance import report
+    try:
+        return await report(start, end)
+    except LangameAPIError as exc:
+        raise HTTPException(502, f"LANGAME bar finance unavailable: {exc}") from exc
+
+
 @app.get("/api/finance")
 async def finance(request: Request, days: int = 30):
     user, _ = await current_user(request)
@@ -169,10 +186,16 @@ async def finance(request: Request, days: int = 30):
     end = datetime.now(timezone.utc); start = end - timedelta(days=days)
     from app.bot.analytics import sales_totals
     sales, units, _ = await sales_totals(start, end)
+    bar = None
+    try:
+        from app.webapp.bar_finance import report as bar_report
+        bar = await bar_report(start, end)
+    except LangameAPIError:
+        bar = None
     async with SessionLocal() as session:
         salaries = await session.scalar(select(func.coalesce(func.sum(SalaryPeriod.total_amount), 0)).where(SalaryPeriod.date_from >= start.date(), SalaryPeriod.date_to <= end.date()))
         penalties = await session.scalar(select(func.coalesce(func.sum(SalaryViolation.amount), 0)).where(SalaryViolation.created_at >= start, SalaryViolation.created_at <= end))
-        return {"days": days, "sales": dec(sales), "units": dec(units), "salary": dec(salaries), "penalties": dec(penalties), "net_before_other": dec(sales) - dec(salaries) - dec(penalties)}
+        return {"days": days, "sales": dec(sales), "units": dec(units), "salary": dec(salaries), "penalties": dec(penalties), "net_before_other": dec(sales) - dec(salaries) - dec(penalties), "bar": bar}
 
 
 @app.get("/api/analytics")
@@ -300,23 +323,23 @@ async def shifts(request: Request, days: int = 30):
     if user.role not in (UserRole.OWNER.value, UserRole.ADMIN.value): raise HTTPException(403, "Access denied")
     end = datetime.now(timezone.utc); start = end - timedelta(days=min(max(days, 1), 90))
     async with SessionLocal() as session:
-        stmt = select(Shift, Employee).outerjoin(Employee, Employee.id == Shift.employee_id).where(Shift.started_at >= start).order_by(Shift.started_at.desc()).limit(100)
-        if user.role == UserRole.ADMIN.value and user.employee_id: stmt = stmt.where(Shift.employee_id == user.employee_id)
+        stmt = select(Shift, Employee, Club).outerjoin(Employee, Employee.id == Shift.employee_id).join(Club, Club.id == Shift.club_id).where(Shift.started_at >= start).order_by(Shift.started_at.desc())
+        if user.role == UserRole.ADMIN: stmt = stmt.where(Shift.employee_id == user.employee_id)
         rows = (await session.execute(stmt)).all()
-        return {"items": [{"id": s.id, "employee": e.full_name if e else str(s.employee_id), "started_at": iso(s.started_at), "ended_at": iso(s.ended_at), "status": "open" if s.ended_at is None else "closed"} for s,e in rows]}
+        return {"items": [{"id": s.id, "employee": e.full_name if e else str(s.employee_id), "club": c.name, "started_at": iso(s.started_at), "ended_at": iso(s.ended_at), "status": s.status, "cash_difference": dec(s.cash_difference), "cash_sales": dec(s.cash_sales), "card_sales": dec(s.card_sales), "mobile_sales": dec(s.mobile_sales), "collection": dec(s.collection)} for s,e,c in rows]}
 
 
 @app.get("/api/attention")
 async def attention(request: Request):
     user, _ = await current_user(request); owner_required(user)
     async with SessionLocal() as session:
-        critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock))
-        pending_dismissals = await session.scalar(select(func.count(SalaryViolation.id)).where(SalaryViolation.dismissal_required.is_(True)))
-        return {"critical_stock": critical or 0, "dismissal_required": pending_dismissals or 0}
+        critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock)) or 0
+        dismissal = await session.scalar(select(func.count(SalaryViolation.id)).where(SalaryViolation.dismissal_required.is_(True))) or 0
+        return {"critical_stock": critical, "dismissal_required": dismissal}
 
 
 @app.get("/api/settings")
-async def owner_settings(request: Request):
+async def settings_api(request: Request):
     user, _ = await current_user(request); owner_required(user)
     async with SessionLocal() as session:
         cfg = await session.scalar(select(OwnerReportSettings).where(OwnerReportSettings.owner_telegram_id == user.telegram_id))
