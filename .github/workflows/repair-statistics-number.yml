@@ -1,0 +1,35 @@
+name: repair-statistics-number
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix statistics numeric conversion
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/webapp/app.py')
+          s=p.read_text()
+          old='''        if Number(r.get("cancel", 0)) == 1: continue\n        sales += Number(r.get("count", r.get("quantity", 0))) * Number(r.get("price_sale", r.get("price", 0)))\n        units += Number(r.get("count", r.get("quantity", 0)))\n'''
+          new='''        if float(r.get("cancel", 0) or 0) == 1: continue\n        quantity = float(r.get("count", r.get("quantity", 0)) or 0)\n        price = float(r.get("price_sale", r.get("price", 0)) or 0)\n        sales += quantity * price\n        units += quantity\n'''
+          if old not in s:
+              raise SystemExit('expected Number conversion block not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Validate Python
+        run: python -m py_compile app/webapp/app.py
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/webapp/app.py
+          git commit -m 'fix: repair statistics numeric conversion' || exit 0
+          git push
