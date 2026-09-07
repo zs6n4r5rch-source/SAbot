@@ -81,9 +81,9 @@ async def main():
     install_management_dashboard(web_app)
     install_current_summary_v2(web_app)
     install_current_summary_v3(web_app)
-    install_work_center_v3(web_app)
     install_admin_penalties(web_app)
     install_admin_penalties_ui(web_app)
+    install_work_center_v3(web_app)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
     if webhook_mode:
