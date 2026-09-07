@@ -95,16 +95,16 @@ async def _work(request: Request):
     except LangameAPIError:
         bar = {"sales": None, "purchases": None, "profit": None, "products": []}
 
+    hall = {}
+    if not sessions_error:
+        hall["active_guests"] = len({int(s["guest_id"]) for s in active})
+        hall["active_sessions"] = len(active)
+    # Do not expose unsupported LANGAME metrics as empty/zero values.
+    # There is no confirmed public API method for these metrics.
+
     return {
         "updated_at": now.astimezone(MSK).isoformat(),
-        "hall": {
-            "active_guests": None if sessions_error else len({int(s["guest_id"]) for s in active}),
-            "active_sessions": None if sessions_error else len(active),
-            "load": None,
-            "bookings": None,
-            "problem_pcs": None,
-            "source": "LANGAME · Сессии",
-        },
+        "hall": hall,
         "guests_now": [
             {"guest_id": int(s["guest_id"]), "session_id": s.get("id"), "started_at": s.get("date_start"),
              "ended_at": s.get("date_stop"), "pc": s.get("pc") or s.get("pc_name") or s.get("computer")}
@@ -132,7 +132,7 @@ function wcMoney(v){return v==null?'—':Number(v||0).toLocaleString('ru-RU',{ma
 function wcEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function wcTime(v){return v?new Date(v).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'—'}
 function wcRow(t,v){return `<div class="row"><div class="row-main"><div class="row-title">${wcEsc(t)}</div></div><div class="row-value">${wcEsc(v)}</div></div>`}
-async function workCenter(){clear();setBottom(false);back();const d=await api('/api/work-center-v3');const guests=d.guests_now||[];root.innerHTML=`<section class="hero"><div class="eyebrow">WORK</div><div class="hero-title">Рабочий центр</div><div class="hero-sub">Оперативная панель: что происходит и что требует действия сейчас.</div><div class="row-sub">Обновлено ${wcTime(d.updated_at)}, Москва.</div></section><div class="section-title"><h2>Зал</h2><span>LANGAME</span></div><section class="card">${wcRow('Гости сейчас',d.hall.active_guests??'—')}${wcRow('Активные сессии',d.hall.active_sessions??'—')}${wcRow('Загрузка',d.hall.load==null?'—':d.hall.load+'%')}${wcRow('Брони',d.hall.bookings??'—')}${wcRow('Проблемные ПК',d.hall.problem_pcs??'—')}<div class="row-sub">${wcEsc(d.hall.source)}</div></section><div class="section-title"><h2>Гости сейчас</h2><span>${guests.length}</span></div><div class="nav-card">${guests.map(g=>`<button class="nav-btn" onclick="crmGuestOpen(${g.guest_id})"><span class="nav-icon">👤</span><span class="nav-copy"><span class="nav-label">Гость #${g.guest_id}</span><span class="nav-hint">С ${wcTime(g.started_at)}${g.pc?' · '+wcEsc(g.pc):''}</span></span><span class="nav-arrow">›</span></button>`).join('')||'<div class="empty">Активных гостей сейчас нет</div>'}</div><div class="section-title"><h2>Бар и снеки</h2><span>сегодня</span></div><section class="card">${wcRow('Продажи',wcMoney(d.bar.sales))}${wcRow('Приходы / закупка',wcMoney(d.bar.purchases))}${wcRow('Прибыль',wcMoney(d.bar.profit))}<button class="primary" onclick="finance()">Открыть финансы</button></section><div class="section-title"><h2>Смены</h2><span>${d.shifts.length}</span></div><div class="nav-card">${d.shifts.map(s=>`<button class="nav-btn" onclick="admins()"><span class="nav-icon">🟢</span><span class="nav-copy"><span class="nav-label">${wcEsc(s.employee)}</span><span class="nav-hint">С ${wcTime(s.started_at)} · наличные ${wcMoney(s.cash)} · карта ${wcMoney(s.card)} · онлайн ${wcMoney(s.online)}</span></span><span class="nav-arrow">${wcMoney(s.sales)}</span></button>`).join('')||'<div class="empty">Открытых смен нет</div>'}</div><div class="section-title"><h2>Склад</h2><span>${d.warehouse.critical}</span></div><div class="nav-card">${d.warehouse.items.map(x=>`<button class="nav-btn" onclick="inventory()"><span class="nav-icon">📦</span><span class="nav-copy"><span class="nav-label">${wcEsc(x.product)}</span><span class="nav-hint">${wcEsc(x.club)} · ${x.quantity} / минимум ${x.min_stock}</span></span><span class="nav-arrow">⚠️</span></button>`).join('')||'<div class="empty">Критических остатков нет</div>'}</div><div class="section-title"><h2>Контроль</h2><span>${d.control.open_without_report+d.control.violations}</span></div><div class="nav-card">${wcRow('Смены без отчёта',d.control.open_without_report)}${wcRow('Критические остатки',d.control.critical_stock)}${wcRow('Требует решения',d.control.violations)}</div>`}
+async function workCenter(){clear();setBottom(false);back();const d=await api('/api/work-center-v3');const guests=d.guests_now||[];const hall=d.hall||{};root.innerHTML=`<section class="hero"><div class="eyebrow">WORK</div><div class="hero-title">Рабочий центр</div><div class="hero-sub">Оперативная панель: что происходит и что требует действия сейчас.</div><div class="row-sub">Обновлено ${wcTime(d.updated_at)}, Москва.</div></section>${(hall.active_guests!=null||hall.active_sessions!=null)?`<div class="section-title"><h2>Зал</h2><span>LANGAME</span></div><section class="card">${hall.active_guests!=null?wcRow('Гости сейчас',hall.active_guests):''}${hall.active_sessions!=null?wcRow('Активные сессии',hall.active_sessions):''}</section>`:''}<div class="section-title"><h2>Гости сейчас</h2><span>${guests.length}</span></div><div class="nav-card">${guests.map(g=>`<button class="nav-btn" onclick="crmGuestOpen(${g.guest_id})"><span class="nav-icon">👤</span><span class="nav-copy"><span class="nav-label">Гость #${g.guest_id}</span><span class="nav-hint">С ${wcTime(g.started_at)}${g.pc?' · '+wcEsc(g.pc):''}</span></span><span class="nav-arrow">›</span></button>`).join('')||'<div class="empty">Активных гостей сейчас нет</div>'}</div><div class="section-title"><h2>Бар и снеки</h2><span>сегодня</span></div><section class="card">${wcRow('Продажи',wcMoney(d.bar.sales))}${wcRow('Приходы / закупка',wcMoney(d.bar.purchases))}${wcRow('Прибыль',wcMoney(d.bar.profit))}<button class="primary" onclick="finance()">Открыть финансы</button></section><div class="section-title"><h2>Смены</h2><span>${d.shifts.length}</span></div><div class="nav-card">${d.shifts.map(s=>`<button class="nav-btn" onclick="admins()"><span class="nav-icon">🟢</span><span class="nav-copy"><span class="nav-label">${wcEsc(s.employee)}</span><span class="nav-hint">С ${wcTime(s.started_at)} · наличные ${wcMoney(s.cash)} · карта ${wcMoney(s.card)} · онлайн ${wcMoney(s.online)}</span></span><span class="nav-arrow">${wcMoney(s.sales)}</span></button>`).join('')||'<div class="empty">Открытых смен нет</div>'}</div><div class="section-title"><h2>Склад</h2><span>${d.warehouse.critical}</span></div><div class="nav-card">${d.warehouse.items.map(x=>`<button class="nav-btn" onclick="inventory()"><span class="nav-icon">📦</span><span class="nav-copy"><span class="nav-label">${wcEsc(x.product)}</span><span class="nav-hint">${wcEsc(x.club)} · ${x.quantity} / минимум ${x.min_stock}</span></span><span class="nav-arrow">⚠️</span></button>`).join('')||'<div class="empty">Критических остатков нет</div>'}</div><div class="section-title"><h2>Контроль</h2><span>${d.control.open_without_report+d.control.violations}</span></div><div class="nav-card">${wcRow('Смены без отчёта',d.control.open_without_report)}${wcRow('Критические остатки',d.control.critical_stock)}${wcRow('Требует решения',d.control.violations)}</div>`}
 </script>'''
 
 
@@ -141,9 +141,6 @@ def install(web_app):
         if isinstance(route, APIRoute) and route.path in ("/api/work-center-v2", "/api/work-center-v3"):
             web_app.routes.remove(route)
     web_app.add_api_route("/api/work-center-v3", _work, methods=["GET"], include_in_schema=False)
-
-    # Keep the already installed Current Summary as the root page and only
-    # extend its JS with the Work Center implementation.
     root_route = next((r for r in web_app.routes if isinstance(r, APIRoute) and r.path == "/"), None)
     if root_route is None:
         return
