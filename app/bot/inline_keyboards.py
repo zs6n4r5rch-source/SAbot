@@ -6,22 +6,24 @@ def _btn(text: str, callback: str):
 
 
 def owner_inline_menu(mini_app_url: str | None = None):
+    """Primary owner menu shown directly under the bot message.
+
+    Keep callback data stable because existing owner handlers route by it.
+    The layout is intentionally compact: one primary Mini App action followed
+    by grouped operational sections.
+    """
     rows = [
-        [_btn("👥 Администраторы", "owner:admins"), _btn("👥 Клиенты", "owner:clients")],
-        [_btn("💰 Финансы", "owner:finance"), _btn("📈 Статистика", "owner:analytics")],
-        [_btn("🍔 Бар и снеки", "owner:inventory"), _btn("🏆 Бонусы", "owner:bonuses")],
-        [_btn("⚠️ Нарушения", "owner:penalties"), _btn("🔔 Требует внимания", "owner:attention")],
+        [_btn("📅 Ежедневная сводка", "owner:daily"), _btn("🔔 Требует внимания", "owner:attention")],
+        [_btn("📊 Аналитика", "owner:analytics"), _btn("💰 Финансы", "owner:finance")],
+        [_btn("🍔 Бар и снеки", "owner:inventory"), _btn("👥 Клиенты", "owner:clients")],
+        [_btn("👥 Администраторы", "owner:admins"), _btn("🏆 Бонусы", "owner:bonuses")],
         [_btn("📣 Рассылки", "owner:broadcast"), _btn("⚙️ Настройки", "owner:settings")],
-        [_btn("🔄 Перезапустить бота", "system:restart")],
     ]
     if mini_app_url:
         base = mini_app_url.rstrip("/")
-        rows.insert(0, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=base))])
-        rows.insert(1, [InlineKeyboardButton(text="📣 Рассылки · Telegram / SMS / Email", web_app=WebAppInfo(url=base + "/static/broadcasts.html"))])
-        rows.insert(2, [InlineKeyboardButton(text="📊 Статистика · все данные", web_app=WebAppInfo(url=base + "/static/statistics.html"))])
-        rows.insert(3, [InlineKeyboardButton(text="👥 Клиенты · сегменты и решения", web_app=WebAppInfo(url=base + "/static/guests.html"))])
-        rows.insert(4, [InlineKeyboardButton(text="📱 Соцсети · SMM аналитика", web_app=WebAppInfo(url=base + "/static/social.html"))])
-        rows.insert(5, [InlineKeyboardButton(text="📣 Реклама · рекомендации", web_app=WebAppInfo(url=base + "/static/advertising.html"))])
+        rows.insert(0, [
+            InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=base))
+        ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -32,7 +34,8 @@ def admin_inline_menu(mini_app_url: str | None = None):
         [_btn("🏆 Мои бонусы", "admin:bonuses"), _btn("🔒 Закрыть смену", "admin:close_shift")],
     ]
     if mini_app_url:
-        rows.insert(0, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=mini_app_url))])
+        base = mini_app_url.rstrip("/")
+        rows.insert(0, [InlineKeyboardButton(text="🚀 Открыть Strike Arena", web_app=WebAppInfo(url=base))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
