@@ -79,7 +79,7 @@ def _sale_amount(row: dict) -> Decimal:
 
 def _arrival_amount(row: dict) -> Decimal:
     qty = _qty(row)
-    for key in ("price_purchase", "purchase_price", "cost_price", "unit_price"):
+    for key in ("price_purchase", "purchase_price", "price_arrival", "cost_price", "unit_price", "price"):
         if row.get(key) is not None:
             return _dec(row.get(key)) * qty
     for key in ("sum", "amount", "total", "cost"):
