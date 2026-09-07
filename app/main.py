@@ -28,6 +28,7 @@ from app.webapp.app import app as web_app
 from app.webapp.admin_shift_control import install as install_admin_shift_control
 from app.webapp.admin_shift_control_fix import apply as apply_admin_shift_control_fix
 from app.webapp.current_summary import install as install_current_summary
+from app.webapp.management_dashboard import install as install_management_dashboard
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
@@ -51,8 +52,6 @@ async def main():
     dp = Dispatcher()
     dp.message.middleware(MenuStateResetMiddleware())
 
-    # The bot's Telegram menu opens the branded Strike Arena Mini App directly.
-    # /start remains available in the command list as the canonical chat entry point.
     await bot.set_my_commands([
         BotCommand(command="start", description="Главное меню"),
     ])
@@ -64,15 +63,12 @@ async def main():
             )
         )
 
-    # /start is the canonical entry point and must precede legacy handlers.
     dp.include_router(start_router)
     dp.include_router(admin_delete_router)
     dp.include_router(bonus_records_router)
     dp.include_router(owner_bonus_router)
     dp.include_router(owner_data_router)
     dp.include_router(smm_router)
-    # These explicit menu handlers precede the legacy inventory router so
-    # navigation cannot fall through into old numeric/form states.
     dp.include_router(inventory_quality_router)
     dp.include_router(router)
     dp.include_router(shift_closing_router)
@@ -84,6 +80,7 @@ async def main():
     apply_admin_shift_control_fix()
     install_admin_shift_control(web_app)
     install_current_summary(web_app)
+    install_management_dashboard(web_app)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
     if webhook_mode:
