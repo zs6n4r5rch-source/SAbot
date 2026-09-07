@@ -74,7 +74,7 @@ def test_manual_penalty_requires_confirmation_before_create():
 def test_manual_penalty_confirmation_shows_admin_rule_and_comment():
     text = Path("app/bot/penalties.py").read_text()
     assert '🧾 <b>Проверьте начисление</b>' in text
-    assert '👤 {data.get("penalty_employee_name")}' in text
+    assert "👤 {data.get('penalty_employee_name')}" in text
     assert '⚠️ {title}' in text
     assert '💰 {amount:.0f} ₽' in text
     assert '📝 {comment[:1000]}' in text
