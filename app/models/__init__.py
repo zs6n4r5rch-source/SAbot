@@ -27,6 +27,7 @@ from app.models.base import (
     AuditLog,
     LangameSyncLog,
 )
+from app.models.bonus_record_model import BonusRecord
 from app.models.owner import (
     Guest,
     GuestTelegram,
@@ -65,7 +66,7 @@ __all__ = [
     "ProductCategory", "Product", "Inventory", "InventoryItem", "InventoryBalance",
     "InventoryOperation", "InventoryOperationType", "InventoryStatus", "StockSnapshot",
     "Writeoff", "WriteoffItem", "WriteoffStatus", "WriteoffReason", "Discrepancy",
-    "DiscrepancyStatus", "AuditLog", "LangameSyncLog",
+    "DiscrepancyStatus", "BonusRecord", "AuditLog", "LangameSyncLog",
     "Guest", "GuestTelegram", "GuestGroup", "GuestGroupMember",
     "MarketingCampaign", "MarketingCampaignGroup", "MarketingRecipient",
     "OwnerDailyReportDelivery", "OwnerReportSettings",
