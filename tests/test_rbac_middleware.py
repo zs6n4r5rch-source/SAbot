@@ -2,11 +2,11 @@ import ast
 from pathlib import Path
 
 
-def test_rbac_middleware_parses_and_has_guest_deny_policy():
+def test_rbac_middleware_parses_and_allows_configured_role_boundary():
     source = Path("app/webapp/rbac_middleware.py").read_text(encoding="utf-8")
     ast.parse(source)
-    assert "Unified management API is restricted to OWNER/ADMIN" in source
-    assert '"owner", "admin"' in source
+    assert '"owner", "admin", "smm", "guest"' in source
+    assert "Unified API role is not configured" in source
 
 
 def test_main_installs_unified_rbac():
