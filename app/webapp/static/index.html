@@ -7,6 +7,7 @@
 </head>
 <body>
   <div id="app">Загрузка…</div>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script>
   (() => {
     const app = document.getElementById('app');
@@ -22,7 +23,7 @@
       previousShift: '/api/app/shifts/previous',
       analytics: '/api/app/analytics'
     };
-    function esc(v){return String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+    function esc(v){return String(v ?? '').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
     function menu(){return `<nav><button data-go="overview">Главная</button><button data-go="workCenter">Work Center</button><button data-go="finance">Финансы</button><button data-go="warehouse">Склад</button><button data-go="groups">CRM</button><button data-go="analytics">Аналитика</button></nav>`}
     function renderLoading(){app.innerHTML = menu() + '<p>Загрузка…</p>'; bind();}
     function renderError(e){app.innerHTML = menu()+`<h2>Ошибка</h2><p>${esc(e.message || e)}</p><button data-go="${state.page}">Повторить</button>`;bind();}
