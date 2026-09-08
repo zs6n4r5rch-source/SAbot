@@ -32,7 +32,7 @@ async def _admin_shifts(request: Request, employee_id: int, days: int = 30):
 async def _group_guests(request: Request, group_id: int):
     user,_=await current_user(request); owner_required(user)
     try:
-        from app.services.langame import langame_client, LangameAPIError
+        from app.services.langame import langame_client
         rows=[]; page=1
         while page<=50:
             payload=await langame_client.guests_search(groups=[int(group_id)],size=100,page=page)
@@ -41,8 +41,7 @@ async def _group_guests(request: Request, group_id: int):
             rows.extend(batch); last=(payload.get('pagination') or {}).get('last_page') if isinstance(payload,dict) else None
             if last and page>=int(last): break
             page+=1
-    except Exception:
-        rows=[]
+    except Exception: rows=[]
     if rows:
         return {"items":[{"guest_id":r.get('guest_id'),"fio":r.get('fio') or r.get('phone') or f"Гость #{r.get('guest_id')}","phone":r.get('phone') or ""} for r in rows if r.get('guest_id') is not None]}
     async with SessionLocal() as session:
@@ -50,8 +49,7 @@ async def _group_guests(request: Request, group_id: int):
     return {"items":[{"guest_id":g.langame_guest_id,"fio":g.fio or g.phone or f"Гость #{g.langame_guest_id}","phone":g.phone or ""} for g in local]}
 
 async def _guest_detail(request: Request, guest_id: int):
-    user,_=await current_user(request); owner_required(user)
-    fio=phone=None
+    user,_=await current_user(request); owner_required(user); fio=phone=None
     try:
         from app.services.langame import langame_client
         payload=await langame_client.guest_by_id(int(guest_id)); rows=payload.get('data') if isinstance(payload,dict) else []
@@ -65,6 +63,7 @@ async def _guest_detail(request: Request, guest_id: int):
 
 JS=r'''<script>
 window.saAdminDetail=async function(id){clear();setBottom(false);back();try{const d=await api(`/api/admins/${Number(id)}/shifts?days=30`);const fmt=v=>v?new Date(v).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';root.insertAdjacentHTML('beforeend',`<div class="section-title"><h2>${d.employee.name}</h2><span>30 дней</span></div>`+(d.items||[]).map(s=>`<section class="card">${row('Смена',s.status==='open'?'Открыта':'Закрыта',fmt(s.started_at)+' → '+fmt(s.ended_at))}${row('Продажи',money(s.sales))}${row('Наличные',money(s.cash_sales))}${row('Карта',money(s.card_sales))}${row('Онлайн',money(s.mobile_sales))}${row('Разница кассы',s.cash_difference==null?'—':money(s.cash_difference))}${s.report_id?`<button class="primary" onclick="shiftReportOpen(${Number(s.report_id)})">📋 Открыть отчёт</button>`:''}</section>`).join('')||'<div class="empty">Смен нет</div>')}catch(e){fail(e)}};
+window.adminDetail=window.saAdminDetail;
 window.saAdmins=async function(){clear();setBottom(false);back();try{const d=await api('/api/admins');const items=d.items||[];root.insertAdjacentHTML('beforeend',`<div class="section-title"><h2>Администраторы</h2><span>${items.length}</span></div>`+(items.map(x=>`<button class="nav-btn" style="background:var(--sa-surface);margin:5px 0" onclick="saAdminDetail(${Number(x.id)})"><span class="nav-icon">👤</span><span class="nav-copy"><span class="nav-label">${x.name}</span><span class="nav-hint">${x.shift?.status==='open'?'🟢 Сейчас на смене':x.shift?.status==='closed'?(x.shift.report_status==='submitted'?'⚪ Смена закрыта':'🟠 Отчёт не сдан'):'⚪ Сегодня смены нет'}</span></span><span class="nav-arrow">›</span></button>`).join(''))}`)}catch(e){fail(e)}};
 window.admins=window.saAdmins;
 window.goNav=function(which){if(which==='home')return window.home();if(which==='work')return window.workCenter?window.workCenter():window.home();if(which==='more')return window.settings?window.settings():window.home()};
@@ -78,7 +77,7 @@ async def _index():
 def install(web_app):
     for route in list(web_app.routes):
         if isinstance(route,APIRoute) and route.path in ('/api/admins','/api/admins/{employee_id}/shifts','/api/admins/guest-groups/{group_id}','/api/admins/guest/{guest_id}'): web_app.routes.remove(route)
-    web_app.add_api_route('/api/admins/{employee_id}/shifts',_admin_shifts,methods=['GET'],include_in_schema=False)
+    web_app.add_api_route("/api/admins/{employee_id}/shifts",_admin_shifts,methods=["GET"],include_in_schema=False)
     web_app.add_api_route('/api/admins',_admins,methods=['GET'],include_in_schema=False)
     web_app.add_api_route('/api/admins/guest-groups/{group_id}',_group_guests,methods=['GET'],include_in_schema=False)
     web_app.add_api_route('/api/admins/guest/{guest_id}',_guest_detail,methods=['GET'],include_in_schema=False)
