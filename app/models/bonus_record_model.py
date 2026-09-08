@@ -11,7 +11,6 @@ class BonusRecord(Base):
     __tablename__ = "bonus_records"
     __table_args__ = (
         Index("ix_bonus_records_source", "source", "source_id", unique=True),
-        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
