@@ -23,59 +23,90 @@ from app.services.polling_lock import PollingLock
 from app.services.telegram_webhook import router as telegram_webhook_router, setup_webhook
 from app.db.session import engine, SessionLocal
 from app.webapp.app import app as web_app
-from app.webapp.admin_shift_control import install as install_admin_shift_control
-from app.webapp.admin_shift_control_fix import apply as apply_admin_shift_control_fix
-from app.webapp.admin_penalties import install as install_admin_penalties
-from app.webapp.admin_penalties_ui import install as install_admin_penalties_ui
-from app.webapp.current_summary import install as install_current_summary
-from app.webapp.current_summary_v2 import install as install_current_summary_v2
-from app.webapp.current_summary_v3 import install as install_current_summary_v3
-from app.webapp.management_dashboard import install as install_management_dashboard
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
-from app.webapp.work_center_v3 import install as install_work_center_v3
-from app.webapp.page_composer import install as install_page_composer
+from app.webapp.unified_api import router as unified_api_router
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
-logger=logging.getLogger(__name__)
-UI_VERSION="6da376ef"
+logger = logging.getLogger(__name__)
+UI_VERSION = "r1-r3-unified-1"
+
 def mini_app_url_with_version(url):
-    base=(url or "").rstrip("/")
+    base = (url or "").rstrip("/")
     if not base:
         return base
     return base + ("&" if "?" in base else "?") + "ui=" + UI_VERSION
+
 async def provision_staff():
     async with SessionLocal() as session:
-        created=await ensure_real_staff_profiles(session); await session.commit()
-        if created: logger.info("Provisioned %s real staff access profiles",created)
+        created = await ensure_real_staff_profiles(session)
+        await session.commit()
+        if created:
+            logger.info("Provisioned %s real staff access profiles", created)
+
 async def main():
-    await provision_staff(); bot=Bot(token=settings.telegram_bot_token,default=DefaultBotProperties(parse_mode=ParseMode.HTML)); dp=Dispatcher(); dp.message.middleware(MenuStateResetMiddleware())
+    await provision_staff()
+    bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher()
+    dp.message.middleware(MenuStateResetMiddleware())
     if settings.mini_app_url:
         settings.mini_app_url = mini_app_url_with_version(settings.mini_app_url)
-    await bot.set_my_commands([BotCommand(command="start",description="Главное меню")])
+    await bot.set_my_commands([BotCommand(command="start", description="Главное меню")])
     if settings.mini_app_url:
-        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena",web_app=WebAppInfo(url=settings.mini_app_url)))
+        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="SAbot", web_app=WebAppInfo(url=settings.mini_app_url)))
         logger.info("Mini App UI version: %s", UI_VERSION)
-    dp.include_router(start_router); dp.include_router(admin_delete_router); dp.include_router(bonus_records_router); dp.include_router(owner_bonus_router); dp.include_router(owner_data_router); dp.include_router(smm_router); dp.include_router(inventory_quality_router); dp.include_router(router); dp.include_router(shift_closing_router); dp.include_router(restart_router)
-    web_app.include_router(statistics_router); web_app.include_router(smm_api_router); web_app.include_router(social_api_router); web_app.include_router(telegram_webhook_router)
-    apply_admin_shift_control_fix(); install_current_summary(web_app); install_management_dashboard(web_app); install_current_summary_v2(web_app); install_current_summary_v3(web_app); install_work_center_v3(web_app); install_admin_shift_control(web_app); install_admin_penalties(web_app); install_admin_penalties_ui(web_app); install_page_composer(web_app)
-    webhook_mode=bool(os.getenv("RENDER_EXTERNAL_URL"))
-    if webhook_mode: await setup_webhook(bot,dp)
-    web_port=int(os.getenv("PORT",str(settings.web_port))); web_server=UvicornServer(UvicornConfig(web_app,host=settings.web_host,port=web_port,log_level="info")); web_task=asyncio.create_task(web_server.serve());
+
+    dp.include_router(start_router)
+    dp.include_router(admin_delete_router)
+    dp.include_router(bonus_records_router)
+    dp.include_router(owner_bonus_router)
+    dp.include_router(owner_data_router)
+    dp.include_router(smm_router)
+    dp.include_router(inventory_quality_router)
+    dp.include_router(router)
+    dp.include_router(shift_closing_router)
+    dp.include_router(restart_router)
+
+    web_app.include_router(statistics_router)
+    web_app.include_router(smm_api_router)
+    web_app.include_router(social_api_router)
+    web_app.include_router(telegram_webhook_router)
+    web_app.include_router(unified_api_router)
+
+    webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
+    web_port = int(os.getenv("PORT", str(settings.web_port)))
+    web_server = UvicornServer(UvicornConfig(web_app, host=settings.web_host, port=web_port, log_level="info"))
+    web_task = asyncio.create_task(web_server.serve())
     from app.bot.daily_owner_report import daily_report_scheduler
-    report_task=asyncio.create_task(daily_report_scheduler(bot)); shift_close_task=asyncio.create_task(shift_close_scheduler(bot)); polling_lock=PollingLock()
+    report_task = asyncio.create_task(daily_report_scheduler(bot))
+    shift_close_task = asyncio.create_task(shift_close_scheduler(bot))
+    polling_lock = PollingLock()
     try:
-        logger.info("Starting Strike Arena bot (webhook=%s)...",webhook_mode)
-        if webhook_mode: await web_task
-        else: await polling_lock.acquire(); await dp.start_polling(bot)
+        logger.info("Starting SAbot (webhook=%s)...", webhook_mode)
+        if webhook_mode:
+            await setup_webhook(bot, dp)
+            await web_task
+        else:
+            await polling_lock.acquire()
+            await dp.start_polling(bot)
     finally:
-        if not webhook_mode: await polling_lock.release()
-        web_server.should_exit=True
-        if not web_task.done(): await web_task
-        report_task.cancel(); shift_close_task.cancel()
-        for task in (report_task,shift_close_task):
-            try: await task
-            except asyncio.CancelledError: pass
-        await bot.session.close(); await langame_client.aclose(); await engine.dispose()
-if __name__=="__main__": asyncio.run(main())
+        if not webhook_mode:
+            await polling_lock.release()
+        web_server.should_exit = True
+        if not web_task.done():
+            await web_task
+        report_task.cancel()
+        shift_close_task.cancel()
+        for task in (report_task, shift_close_task):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        await bot.session.close()
+        await langame_client.aclose()
+        await engine.dispose()
+
+if __name__ == "__main__":
+    asyncio.run(main())
