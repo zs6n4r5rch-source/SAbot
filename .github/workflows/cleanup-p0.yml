@@ -1,0 +1,21 @@
+name: Cleanup P0 branch
+on:
+  push:
+    branches: [p0-final]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove generated files
+        run: |
+          find app -type d -name __pycache__ -prune -exec rm -rf {} +
+          rm -f p0-note.txt README_P0.md tmp tmp2 tmp3 tmp4
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m 'chore: remove generated P0 artifacts'
+          git push
