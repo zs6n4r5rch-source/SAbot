@@ -130,3 +130,20 @@ try:
     print('SAbot critical stock hotfix loaded', flush=True)
 except Exception as exc:
     print(f'SAbot critical stock hotfix failed: {exc}', flush=True)
+
+# Telegram can cache the Mini App's fixed Main Mini App URL even when the
+# application code itself has been redeployed.  Force fresh HTML for the
+# entry document and avoid browser intermediaries keeping an old shell.
+try:
+    from fastapi import Request
+
+    @app.middleware("http")
+    async def _sabot_no_cache_mini_app(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path == "/":
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+except Exception as exc:
+    print(f'SAbot Mini App cache middleware failed: {exc}', flush=True)
