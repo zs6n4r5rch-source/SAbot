@@ -123,7 +123,6 @@ const oldWork=window.workCenter;window.workCenter=async function(){if(me?.role!=
 
 _install_sabot_owner_hotfix()
 
-# Load the separately maintained critical-stock hotfix after the main owner patch.
 try:
     from owner_critical_hotfix import install as _install_critical_stock_hotfix
     _install_critical_stock_hotfix()
@@ -131,9 +130,6 @@ try:
 except Exception as exc:
     print(f'SAbot critical stock hotfix failed: {exc}', flush=True)
 
-# Telegram can cache the Mini App's fixed Main Mini App URL even when the
-# application code itself has been redeployed.  Force fresh HTML for the
-# entry document and avoid browser intermediaries keeping an old shell.
 try:
     from fastapi import Request
 
@@ -147,3 +143,10 @@ try:
         return response
 except Exception as exc:
     print(f'SAbot Mini App cache middleware failed: {exc}', flush=True)
+
+try:
+    from owner_final_hotfix import install as _install_final_owner_hotfix
+    _install_final_owner_hotfix()
+    print('SAbot final owner hotfix loaded', flush=True)
+except Exception as exc:
+    print(f'SAbot final owner hotfix failed: {exc}', flush=True)
