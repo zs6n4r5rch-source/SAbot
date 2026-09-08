@@ -39,6 +39,12 @@ from app.webapp.page_composer import install as install_page_composer
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger=logging.getLogger(__name__)
+UI_VERSION="78ed52b7"
+def mini_app_url_with_version(url):
+    base=(url or "").rstrip("/")
+    if not base:
+        return base
+    return base + ("&" if "?" in base else "?") + "ui=" + UI_VERSION
 async def provision_staff():
     async with SessionLocal() as session:
         created=await ensure_real_staff_profiles(session); await session.commit()
@@ -46,7 +52,9 @@ async def provision_staff():
 async def main():
     await provision_staff(); bot=Bot(token=settings.telegram_bot_token,default=DefaultBotProperties(parse_mode=ParseMode.HTML)); dp=Dispatcher(); dp.message.middleware(MenuStateResetMiddleware())
     await bot.set_my_commands([BotCommand(command="start",description="Главное меню")])
-    if settings.mini_app_url: await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena",web_app=WebAppInfo(url=settings.mini_app_url.rstrip("/"))))
+    if settings.mini_app_url:
+        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena",web_app=WebAppInfo(url=mini_app_url_with_version(settings.mini_app_url))))
+        logger.info("Mini App UI version: %s", UI_VERSION)
     dp.include_router(start_router); dp.include_router(admin_delete_router); dp.include_router(bonus_records_router); dp.include_router(owner_bonus_router); dp.include_router(owner_data_router); dp.include_router(smm_router); dp.include_router(inventory_quality_router); dp.include_router(router); dp.include_router(shift_closing_router); dp.include_router(restart_router)
     web_app.include_router(statistics_router); web_app.include_router(smm_api_router); web_app.include_router(social_api_router); web_app.include_router(telegram_webhook_router)
     apply_admin_shift_control_fix(); install_current_summary(web_app); install_management_dashboard(web_app); install_current_summary_v2(web_app); install_current_summary_v3(web_app); install_work_center_v3(web_app); install_admin_shift_control(web_app); install_admin_penalties(web_app); install_admin_penalties_ui(web_app); install_page_composer(web_app)
