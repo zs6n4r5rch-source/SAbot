@@ -57,6 +57,11 @@ window.criticalStock=async function(){clear();setBottom(false);try{const d=await
 window.__sabotOwnerHotfixBoot=function(){
   try{
     if(typeof me!=='undefined' && me?.role==='owner' && typeof window.home==='function'){
+      /* The base bottom-nav handler incorrectly routes owner "Работа" to inventory.
+         Bind the actual owner Work Center directly, after all hotfix scripts exist. */
+      document.querySelectorAll('[data-nav="work"]').forEach(x=>{
+        x.onclick=()=>window.workCenter();
+      });
       window.home();
       return true;
     }
