@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, desc
@@ -83,7 +83,9 @@ def iso(v):
 
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    from app.webapp.page_composer import compose_page
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(compose_page(html))
 
 
 @app.get("/healthz")
