@@ -122,3 +122,10 @@ const oldWork=window.workCenter;window.workCenter=async function(){if(me?.role!=
     pc.compose_page = compose_with_hotfix
 
 _install_sabot_owner_hotfix()
+
+# Load the separately maintained critical-stock hotfix after the main owner patch.
+try:
+    from owner_critical_hotfix import install as _install_critical_stock_hotfix
+    _install_critical_stock_hotfix()
+except Exception:
+    pass
