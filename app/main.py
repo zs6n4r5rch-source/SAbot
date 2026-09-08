@@ -39,7 +39,7 @@ from app.webapp.page_composer import install as install_page_composer
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger=logging.getLogger(__name__)
-UI_VERSION="78ed52b7"
+UI_VERSION="6da376ef"
 def mini_app_url_with_version(url):
     base=(url or "").rstrip("/")
     if not base:
