@@ -127,5 +127,6 @@ _install_sabot_owner_hotfix()
 try:
     from owner_critical_hotfix import install as _install_critical_stock_hotfix
     _install_critical_stock_hotfix()
-except Exception:
-    pass
+    print('SAbot critical stock hotfix loaded', flush=True)
+except Exception as exc:
+    print(f'SAbot critical stock hotfix failed: {exc}', flush=True)
