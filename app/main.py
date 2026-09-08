@@ -23,6 +23,7 @@ from app.services.polling_lock import PollingLock
 from app.services.telegram_webhook import router as telegram_webhook_router, setup_webhook
 from app.db.session import engine, SessionLocal
 from app.webapp.app import app as web_app
+from app.webapp.admin_shift_control import install as install_admin_shift_control
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
@@ -31,7 +32,7 @@ from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)
-UI_VERSION = "r1-r3-unified-1"
+UI_VERSION = "r1-r3-unified-2"
 
 def mini_app_url_with_version(url):
     base = (url or "").rstrip("/")
@@ -74,6 +75,7 @@ async def main():
     web_app.include_router(social_api_router)
     web_app.include_router(telegram_webhook_router)
     web_app.include_router(unified_api_router)
+    install_admin_shift_control(web_app)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
     web_port = int(os.getenv("PORT", str(settings.web_port)))
