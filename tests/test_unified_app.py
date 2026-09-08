@@ -12,8 +12,5 @@ def test_main_parses():
 
 def test_unified_shell_exists():
     html = Path("app/webapp/static/index_v2.html").read_text(encoding="utf-8")
-    assert "/api/app/overview" in html
-    assert "/api/app/work-center" in html
-    assert "/api/app/crm/groups" in html
-    assert "/api/app/finance" in html
-    assert "/api/app/warehouse" in html
+    for marker in ["api('overview')", "api('work-center')", "api('crm/groups')", "api('finance", "api('warehouse')"]:
+        assert marker in html
