@@ -51,9 +51,11 @@ async def provision_staff():
         if created: logger.info("Provisioned %s real staff access profiles",created)
 async def main():
     await provision_staff(); bot=Bot(token=settings.telegram_bot_token,default=DefaultBotProperties(parse_mode=ParseMode.HTML)); dp=Dispatcher(); dp.message.middleware(MenuStateResetMiddleware())
+    if settings.mini_app_url:
+        settings.mini_app_url = mini_app_url_with_version(settings.mini_app_url)
     await bot.set_my_commands([BotCommand(command="start",description="Главное меню")])
     if settings.mini_app_url:
-        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena",web_app=WebAppInfo(url=mini_app_url_with_version(settings.mini_app_url))))
+        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Strike Arena",web_app=WebAppInfo(url=settings.mini_app_url)))
         logger.info("Mini App UI version: %s", UI_VERSION)
     dp.include_router(start_router); dp.include_router(admin_delete_router); dp.include_router(bonus_records_router); dp.include_router(owner_bonus_router); dp.include_router(owner_data_router); dp.include_router(smm_router); dp.include_router(inventory_quality_router); dp.include_router(router); dp.include_router(shift_closing_router); dp.include_router(restart_router)
     web_app.include_router(statistics_router); web_app.include_router(smm_api_router); web_app.include_router(social_api_router); web_app.include_router(telegram_webhook_router)
