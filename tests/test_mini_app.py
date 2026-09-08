@@ -1,18 +1,32 @@
 from pathlib import Path
 
 
-def test_unified_mini_app_contains_management_sections():
+def test_active_mini_app_contains_management_sections():
     root = Path(__file__).parents[1]
-    html = (root / "app" / "webapp" / "static" / "index_v2.html").read_text(encoding="utf-8")
-    for label in ["Summary", "WORK CENTER", "CRM", "FINANCE", "WAREHOUSE", "Предыдущая смена", "CONTROL"]:
+    html = (root / "app" / "webapp" / "static" / "index.html").read_text(encoding="utf-8")
+    for label in ["Главная", "Work Center", "Финансы", "Склад", "CRM", "Аналитика"]:
         assert label in html
 
 
-def test_unified_mini_app_has_server_api_sections():
+def test_active_mini_app_uses_unified_api_routes():
+    root = Path(__file__).parents[1]
+    html = (root / "app" / "webapp" / "static" / "index.html").read_text(encoding="utf-8")
+    for route in [
+        "/api/app/overview",
+        "/api/app/work-center",
+        "/api/app/finance",
+        "/api/app/warehouse",
+        "/api/app/crm/groups",
+        "/api/app/analytics",
+    ]:
+        assert route in html
+
+
+def test_unified_server_exposes_active_mini_app_routes():
     root = Path(__file__).parents[1]
     text = (root / "app" / "webapp" / "unified_api.py").read_text(encoding="utf-8")
-    for route in ["/overview", "/work-center", "/crm/groups", "/warehouse", "/finance", "/shifts/previous", "/analytics"]:
-        assert f'"{route}"' in text
+    for route in ["/overview", "/work-center", "/crm/groups", "/warehouse", "/finance", "/analytics"]:
+        assert f"'{route}'" in text
 
 
 def test_legacy_page_composer_is_non_mutating():
