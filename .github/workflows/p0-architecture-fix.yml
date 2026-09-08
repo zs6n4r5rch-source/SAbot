@@ -1,0 +1,107 @@
+name: P0 architecture fix
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Refactor root page composition
+        env:
+          TARGET_BRANCH: ${{ github.head_ref }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          files = [
+              Path('app/webapp/admin_shift_control.py'),
+              Path('app/webapp/current_summary.py'),
+              Path('app/webapp/management_dashboard.py'),
+              Path('app/webapp/current_summary_v3.py'),
+              Path('app/webapp/work_center_v3.py'),
+              Path('app/webapp/admin_penalties_ui.py'),
+          ]
+
+          def refactor_index(text: str) -> str:
+              m = re.search(r'(?ms)^async def _index\(\):\n(.*?)(?=^\ndef install\()', text)
+              if not m:
+                  raise SystemExit('missing _index/install block')
+              body = m.group(1)
+              body = re.sub(r'^\s*from app\.webapp\.[^\n]+ import _index as \w+\n', '', body, flags=re.M)
+              body = re.sub(r'^\s*response = await \w+\(\)\n', '', body, flags=re.M)
+              body = re.sub(r'^\s*html = response\.body\.decode\([^\n]+\)\n', '', body, flags=re.M)
+              body = body.replace("    html = response.body.decode('utf-8')\n", '')
+              body = re.sub(r'^async def _index\(\):', 'async def _index(html: str):', body)
+              body = body.replace("    from app.webapp.current_summary import _index as current_summary_index\n", '')
+              body = body.replace("    from app.webapp.management_dashboard import _index as management_index\n", '')
+              # Root wrappers are converted to string layers. Preserve their inner HTML expression.
+              body = re.sub(r'(?m)^\s*return HTMLResponse\((html(?:\.|\[|\.replace\()[^\n]*)\)\s*$', r'    return \1', body)
+              body = re.sub(r'(?m)^\s*return HTMLResponse\(html\)\s*$', '    return html', body)
+              body = re.sub(r'(?m)^\s*return response\s*$', '    return html', body)
+              # A few layers append JS with response.body; after the generic cleanup they must
+              # use the incoming html string directly.
+              body = body.replace('response.body.decode("utf-8")', 'html')
+              body = body.replace("response.body.decode('utf-8')", 'html')
+              new = 'async def _index(html: str):\n' + body
+              return text[:m.start()] + new + text[m.end():]
+
+          for p in files:
+              s = p.read_text()
+              if 'async def _index():' in s:
+                  s2 = refactor_index(s)
+                  if s2 == s:
+                      raise SystemExit(f'no change: {p}')
+                  p.write_text(s2)
+
+          # Remove every feature-owned root registration/manipulation block.
+          for p in files:
+              s = p.read_text()
+              s = re.sub(r'(?ms)^\s*web_app\.add_api_route\(["\']/["\'][^\n]*\n', '', s)
+              s = re.sub(r'(?ms)^\s*# The current-summary root page.*?^\s*break\n', '', s)
+              s = re.sub(r'(?ms)^\s*# Root route.*?^\s*break\n', '', s)
+              p.write_text(s)
+
+          app = Path('app/webapp/app.py')
+          s = app.read_text()
+          s = s.replace('from fastapi.responses import FileResponse\n', 'from fastapi.responses import HTMLResponse\n')
+          s = re.sub(r'(?ms)^@app\.get\("/"\)\nasync def index\(\):\n    return FileResponse\(STATIC_DIR / "index\.html"\)\n', '''_PAGE_LAYERS = []\n\n\ndef _load_page_layers():\n    from app.webapp import admin_shift_control, current_summary, management_dashboard, current_summary_v3, work_center_v3, admin_penalties_ui\n    return [\n        admin_shift_control,\n        current_summary,\n        management_dashboard,\n        current_summary_v3,\n        work_center_v3,\n        admin_penalties_ui,\n    ]\n\n\n_PAGE_LAYERS = _load_page_layers()\n\n\n@app.get("/")\nasync def index():\n    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")\n    for layer in _PAGE_LAYERS:\n        html = await layer._index(html)\n    return HTMLResponse(html)\n''', s, count=1)
+          app.write_text(s)
+          PY
+
+          python -m compileall -q app
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          files = [Path('app/webapp/app.py'), *Path('app/webapp').glob('*.py')]
+          roots=[]
+          for p in files:
+              text=p.read_text()
+              if re.search(r'add_api_route\(["\']/["\']', text):
+                  roots.append(str(p))
+          assert roots == [], f'feature root routes remain: {roots}'
+          text=Path('app/webapp/app.py').read_text()
+          assert '_PAGE_LAYERS' in text and 'for layer in _PAGE_LAYERS' in text
+          print('P0 static checks passed')
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/webapp .github/workflows/p0-architecture-fix.yml
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'fix: centralize Mini App root page composition'
+            git push origin "$TARGET_BRANCH"
+          fi
