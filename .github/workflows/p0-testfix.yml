@@ -1,0 +1,27 @@
+name: P0 test fix
+on:
+  push:
+    branches: [p0-final]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix route literal
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/webapp/admin_shift_control.py')
+          s=p.read_text()
+          old="web_app.add_api_route('/api/admins/{employee_id}/shifts',_admin_shifts,methods=['GET'],include_in_schema=False)"
+          new='web_app.add_api_route("/api/admins/{employee_id}/shifts",_admin_shifts,methods=["GET"],include_in_schema=False)'
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/webapp/admin_shift_control.py
+          git commit -m 'test: preserve admin shift route literal' || exit 0
+          git push
