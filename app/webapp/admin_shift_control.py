@@ -78,7 +78,7 @@ async def _index():
 def install(web_app):
     for route in list(web_app.routes):
         if isinstance(route,APIRoute) and route.path in ('/api/admins','/api/admins/{employee_id}/shifts','/api/admins/guest-groups/{group_id}','/api/admins/guest/{guest_id}'): web_app.routes.remove(route)
-    web_app.add_api_route('/api/admins/{employee_id}/shifts',_admin_shifts,methods=['GET'],include_in_schema=False)
+    web_app.add_api_route("/api/admins/{employee_id}/shifts",_admin_shifts,methods=["GET"],include_in_schema=False)
     web_app.add_api_route('/api/admins',_admins,methods=['GET'],include_in_schema=False)
     web_app.add_api_route('/api/admins/guest-groups/{group_id}',_group_guests,methods=['GET'],include_in_schema=False)
     web_app.add_api_route('/api/admins/guest/{guest_id}',_guest_detail,methods=['GET'],include_in_schema=False)
