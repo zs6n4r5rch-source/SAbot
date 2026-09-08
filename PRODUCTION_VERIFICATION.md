@@ -1,13 +1,14 @@
 # Production Verification
 
-COMMIT: Pending final implementation commit.
-DEPLOY: NOT VERIFIED.
+COMMIT: `1c74797614ad6c121186355a866c60c4659581c1` and subsequent regression commits.
+DEPLOY: NOT VERIFIED in this tool session.
 LIVE: NOT VERIFIED.
 LOGS: NOT VERIFIED.
-RUNTIME: NOT VERIFIED.
-API: NOT VERIFIED.
-SMOKE TEST: Repository-level tests must pass before deploy; live authenticated smoke requires deployment credentials/session.
+RUNTIME: Repository runtime wiring inspected; live process not verified.
+API: Static/API contract coverage added; authenticated live Telegram API smoke is NOT VERIFIED.
+SMOKE TEST: Source-level regression tests added/updated; no claim is made that the full suite ran in production.
 ACCEPTANCE: NOT APPROVED.
 KNOWN ISSUES:
-- Render workspace/service access was not available in the current tool session.
-- No production claim is made until a live Render deploy, logs and runtime/API checks are completed.
+- No usable Render workspace/service was available to inspect or deploy in this session.
+- Production acceptance remains blocked until CODE → TEST → DEPLOY → LIVE → LOGS → RUNTIME/API → SMOKE passes.
+- LANGAME capabilities marked TO VERIFY remain unavailable rather than fabricated.
