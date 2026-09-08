@@ -4,7 +4,7 @@ from pathlib import Path
 def test_unified_mini_app_contains_management_sections():
     root = Path(__file__).parents[1]
     html = (root / "app" / "webapp" / "static" / "index_v2.html").read_text(encoding="utf-8")
-    for label in ["Summary", "WORK CENTER", "CRM", "FINANCE", "WAREHOUSE", "Предыдущая смена", "КОНТРОЛЬ"]:
+    for label in ["Summary", "WORK CENTER", "CRM", "FINANCE", "WAREHOUSE", "Предыдущая смена", "CONTROL"]:
         assert label in html
 
 
