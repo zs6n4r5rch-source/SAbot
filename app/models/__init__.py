@@ -24,12 +24,12 @@ from app.models.base import (
     WriteoffReason,
     Discrepancy,
     DiscrepancyStatus,
-    BonusRecord,
     AuditLog,
     LangameSyncLog,
     CampaignStatus,
     RecipientStatus,
 )
+from app.models.bonus import BonusRecord
 from app.models.guests import (
     Guest,
     GuestGroup,
