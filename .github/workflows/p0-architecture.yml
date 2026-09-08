@@ -1,0 +1,53 @@
+name: p0-architecture
+on:
+  push:
+    branches: [p0-architecture]
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: p0-architecture
+      - name: Patch architecture and P2 fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('.')
+          p=root/'app/webapp/app.py'; s=p.read_text(); old='''@app.get("/")\nasync def index():\n    return FileResponse(STATIC_DIR / "index.html")\n'''; new='''# Explicit page-layer composition. Order is the intentional JS overlay order.\nfrom app.webapp import admin_shift_control, current_summary, management_dashboard, current_summary_v3, work_center_v3, admin_penalties_ui\n_PAGE_LAYERS = [admin_shift_control, current_summary, management_dashboard, current_summary_v3, work_center_v3, admin_penalties_ui]\n\n@app.get("/")\nasync def index():\n    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")\n    for layer in _PAGE_LAYERS:\n        response = await layer._index()\n        html = response.body.decode("utf-8")\n    return HTMLResponse(html)\n'''; assert old in s; s=s.replace(old,new,1); s=s.replace('from fastapi.responses import FileResponse','from fastapi.responses import FileResponse, HTMLResponse',1); p.write_text(s)
+          specs=['app/webapp/current_summary.py','app/webapp/management_dashboard.py','app/webapp/current_summary_v3.py','app/webapp/admin_shift_control.py','app/webapp/admin_penalties_ui.py']
+          for fn in specs:
+            p=root/fn; s=p.read_text(); s=re.sub(r'\n\s*web_app\.add_api_route\([\'\"]/[\'\"],\s*_index,\s*methods=\[\'GET\'\],\s*include_in_schema=False\)', '', s, count=1); s=re.sub(r'\n\s*web_app\.add_api_route\([\'\"]/[\'\"],_index,methods=\[\'GET\'\],include_in_schema=False\)', '', s, count=1); s=re.sub(r'\n\s*for route in list\(web_app\.routes\):\n\s*if isinstance\(route,APIRoute\).*?web_app\.routes\.insert\(0,route\)', '', s, flags=re.S); p.write_text(s)
+          p=root/'app/webapp/work_center_v3.py'; s=p.read_text(); s=re.sub(r'\n\s*for route in list\(web_app\.routes\):\n\s*if isinstance\(route,APIRoute\) and route\.path == [\'\"]/[\'\"]:.*?web_app\.routes\.append\(route\)', '', s, flags=re.S); p.write_text(s)
+          p=root/'app/webapp/current_summary_v3.py'; s=p.read_text(); bad='count=int((await langame_client.guests_search(groups=[int(g["id"])],size=1,page=1).get("pagination",{})).get("total",0))'; good='count=int(((await langame_client.guests_search(groups=[int(g["id"])],size=1,page=1)).get("pagination",{})).get("total",0))'; assert bad in s; s=s.replace(bad,good,1); s=s.replace('today_rows=[r for r in sessions if r.get("guest_id") is not None and str(r.get("date_start",""))[:10]==today.isoformat()]\n',''); s=s.replace('return len({int(r["guest_id"]) for r in active}),len(active),len({int(r["guest_id"]) for r in today_rows}),gaming,bar','return len({int(r["guest_id"]) for r in active}),len(active),gaming,bar',1); s=s.replace('active,active_sessions,today_guests,gaming,bar=await _live(now)','active,active_sessions,gaming,bar=await _live(now)',1); s=s.replace('except LangameAPIError: active=active_sessions=today_guests=gaming=bar=None','except LangameAPIError: active=active_sessions=gaming=bar=None',1); s=s.replace('"guests":{"active":active,"active_sessions":active_sessions,"today":today_guests}','"guests":{"active":active,"active_sessions":active_sessions}',1); old_shift='''<button class="nav-btn"><span class="nav-icon">🟢</span><span class="nav-copy"><span class="nav-label">${svE(s.employee)}</span><span class="nav-hint">С ${svT(s.started_at)}</span></span></button>'''; new_shift='''<button class="nav-btn" onclick="saAdminDetail(${Number(s.employee_id)})"><span class="nav-icon">🟢</span><span class="nav-copy"><span class="nav-label">${svE(s.employee)}</span><span class="nav-hint">С ${svT(s.started_at)}</span></span><span class="nav-arrow">›</span></button>'''; assert old_shift in s; s=s.replace(old_shift,new_shift,1); p.write_text(s)
+          p=root/'app/webapp/work_center_v3.py'; s=p.read_text(); old='''<button class="nav-btn"><span class="nav-icon">🟢</span><span class="nav-copy"><span class="nav-label">${wcEsc(s.employee)}</span><span class="nav-hint">С ${wcTime(s.started_at)}</span></span></button>'''; new='''<button class="nav-btn" onclick="saAdminDetail(${Number(s.employee_id)})"><span class="nav-icon">🟢</span><span class="nav-copy"><span class="nav-label">${wcEsc(s.employee)}</span><span class="nav-hint">С ${wcTime(s.started_at)}</span></span><span class="nav-arrow">›</span></button>'''; s=s.replace(old,new,1); p.write_text(s)
+          p=root/'app/main.py'; s=p.read_text(); s=s.replace('from app.webapp.admin_shift_control_fix import apply as apply_admin_shift_control_fix\n',''); s=s.replace('    apply_admin_shift_control_fix(); ','    '); p.write_text(s)
+          PY
+      - name: Validate
+        run: |
+          python -m compileall -q app
+          pytest -q tests/test_mini_app.py
+          python - <<'PY'
+          import asyncio
+          from app.webapp.app import app, _PAGE_LAYERS, index
+          roots=[r for r in app.routes if getattr(r,'path',None)=='/']
+          assert len(roots)==1, len(roots)
+          print('GET / routes:',len(roots))
+          print('PAGE_LAYERS:',[m.__name__ for m in _PAGE_LAYERS])
+          async def check():
+            html=(await index()).body.decode()
+            for marker in ('function workCenter','function workWarehouse','function workControl','function criticalStock','function crmGroup','function crmGuestOpen','window.home=','window.goNav='):
+              assert marker in html, marker
+            print('HTML markers OK')
+          asyncio.run(check())
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/webapp/app.py app/webapp/current_summary.py app/webapp/management_dashboard.py app/webapp/current_summary_v3.py app/webapp/work_center_v3.py app/webapp/admin_shift_control.py app/webapp/admin_penalties_ui.py app/main.py .github/workflows/p0-architecture.yml
+          git commit -m "fix: make mini app page composition explicit" || exit 0
+          git push origin p0-architecture
