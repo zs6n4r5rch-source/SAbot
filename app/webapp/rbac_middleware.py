@@ -4,17 +4,17 @@ from app.webapp.app import current_user
 
 
 class UnifiedRBACMiddleware:
-    """Backend guard for the new management API.
+    """Backend guard for management APIs.
 
-    The frontend is never the authority for access. GUEST users cannot reach
-    management data; SMM is intentionally restricted until its dedicated API
-    contour is enabled.
+    Fine-grained permissions remain endpoint-level; this middleware prevents
+    unauthenticated/unknown roles from entering the protected unified contour.
     """
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope.get("type") != "http" or not scope.get("path", "").startswith("/api/app/"):
+        path = scope.get("path", "")
+        if scope.get("type") != "http" or not path.startswith("/api/app/"):
             await self.app(scope, receive, send)
             return
         request = Request(scope, receive=receive)
@@ -23,8 +23,9 @@ class UnifiedRBACMiddleware:
             role = str(getattr(user, "role", "")).lower()
         except Exception:
             role = ""
-        if role not in {"owner", "admin"}:
-            response = JSONResponse({"detail": "Unified management API is restricted to OWNER/ADMIN"}, status_code=403)
+        if role not in {"owner", "admin", "smm", "guest"}:
+            response = JSONResponse({"detail": "Unified API role is not configured"}, status_code=403)
             await response(scope, receive, send)
             return
+        scope.setdefault("state", {})["unified_role"] = role
         await self.app(scope, receive, send)
