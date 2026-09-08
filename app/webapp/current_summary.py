@@ -32,11 +32,12 @@ def _classify_sale(row: dict, product_map: dict[int, tuple[str, str]]) -> str:
         name = f"{name} {product_map[pid][0]}".lower()
         category = product_map[pid][1].lower()
     text = f"{name} {category}"
-    if any(x in text for x in ("бар", "снек", "напит", "еда", "кофе", "чай", "пицц", "бургер")):
-        return "bar"
     if any(x in text for x in ("игров", "время", "тариф", "час", "аренд", "pc", "vip", "компьют")):
         return "gaming"
-    return "other"
+    # Product sales in LANGAME are club goods/services. Anything that is not
+    # gaming revenue belongs to food/drinks/services rather than an opaque
+    # "other" bucket.
+    return "bar"
 
 
 async def _sales_today():
@@ -79,9 +80,39 @@ async def _sales_today():
                 continue
             units += qty
             totals[_classify_sale(row, product_map)] += amount
-        return {"bar": totals["bar"], "gaming": totals["gaming"], "other": totals["other"], "units": units, "source": "langame"}
+        return {"bar": totals["bar"], "gaming": totals["gaming"], "other": 0.0, "units": units, "source": "langame"}
     except (LangameAPIError, TypeError, ValueError):
         return {"bar": 0.0, "gaming": 0.0, "other": 0.0, "units": 0.0, "source": "unavailable"}
+
+
+async def _langame_loyalty_groups(fallback_rows):
+    try:
+        payload = await langame_client.guest_groups()
+        rows = payload.get("data") or payload.get("items") or payload.get("results") or payload.get("rows") or []
+        if isinstance(rows, dict):
+            rows = rows.get("items") or rows.get("data") or []
+        result = []
+        for row in rows[:12]:
+            if not isinstance(row, dict):
+                continue
+            gid = row.get("id", row.get("group_id"))
+            name = row.get("name") or row.get("title") or row.get("group_name")
+            if gid is None or not name:
+                continue
+            count = row.get("count", row.get("guest_count", row.get("guests_count", row.get("members_count"))))
+            if count is None:
+                try:
+                    found = await langame_client.guests_search(groups=[int(gid)], size=1, page=1)
+                    pagination = found.get("pagination") or {}
+                    count = pagination.get("total") or pagination.get("total_count") or found.get("total") or found.get("count") or 0
+                except (LangameAPIError, TypeError, ValueError):
+                    count = 0
+            result.append({"id": int(gid), "name": str(name), "count": int(count or 0)})
+        if result:
+            return result
+    except (LangameAPIError, TypeError, ValueError):
+        pass
+    return [{"id": gid, "name": name, "count": int(count or 0)} for gid, name, count in fallback_rows]
 
 
 async def _current_summary(request: Request):
@@ -118,6 +149,7 @@ async def _current_summary(request: Request):
             .group_by(GuestGroup.id, GuestGroup.name)
             .order_by(desc(func.count(GuestGroupMember.guest_id)), GuestGroup.name)
         )).all()
+    loyalty_groups = await _langame_loyalty_groups(group_rows)
     sales = await _sales_today()
     open_shifts = []
     for shift, employee in open_rows:
@@ -137,16 +169,13 @@ async def _current_summary(request: Request):
         "shifts": open_shifts,
         "reports": {"submitted": reports_submitted, "pending": reports_pending, "open_without_report": reports_missing},
         "sales": sales,
-        "guests": {
-            "total": guests_total,
-            "groups": [{"id": gid, "name": name, "count": int(count or 0)} for gid, name, count in group_rows],
-        },
+        "guests": {"total": guests_total, "groups": loyalty_groups},
         "attention": {
             "critical_stock": int(critical_stock),
             "dismissal_required": int(pending_dismissals),
             "critical_total": int(critical_stock) + int(pending_dismissals),
         },
-        "note": "Гости сейчас пока не берутся из локальной базы как факт присутствия: для этого нужен отдельный read-only источник LANGAME «С активной сессией».",
+        "note": "Текущие гости берутся из LANGAME в Рабочем центре; группы лояльности — из LANGAME с fallback на локальную синхронизацию.",
     }
 
 
@@ -183,10 +212,6 @@ async def _index():
     response = await legacy_index()
     html = response.body.decode("utf-8")
     marker = "document.getElementById('refresh').onclick=home;"
-    # Both feature modules inject into the existing page script. The legacy
-    # admin module still has an old <script> wrapper, so normalize that wrapper
-    # here before adding the current-summary code; otherwise Telegram's HTML
-    # parser renders the JavaScript source as page text.
     html = html.replace("<script>\nasync function admins()", "\nasync function admins()", 1)
     html = html.replace("</script>" + marker, marker, 1)
     current_js = JS[len("<script>"):-len("</script>")]
@@ -197,9 +222,6 @@ def install(web_app):
     web_app.add_api_route("/api/current-summary", _current_summary, methods=["GET"], include_in_schema=False)
     web_app.add_api_route("/api/current-summary/guests", _group_guests, methods=["GET"], include_in_schema=False)
     web_app.add_api_route("/", _index, methods=["GET"], include_in_schema=False)
-    # The current-summary root page must be before the legacy admin root page.
-    # A shared sort key is not enough because both routes have the same path and
-    # endpoint name; the stable sort otherwise leaves admin_shift_control first.
     for route in list(web_app.routes):
         if isinstance(route, APIRoute) and route.path == "/" and route.endpoint is _index:
             web_app.routes.remove(route)
