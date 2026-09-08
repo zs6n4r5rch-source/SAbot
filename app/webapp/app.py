@@ -18,7 +18,7 @@ from app.db.session import SessionLocal
 from app.models import (
     Employee, TelegramUser, UserRole, Shift, InventoryBalance, Product,
     SalaryViolation, SalaryPeriod, NonMonetaryBonus, Guest, GuestTelegram,
-    OwnerReportSettings, AuditLog, Club
+    OwnerReportSettings, AuditLog, Club, AccessProfile
 )
 from app.services.langame import langame_client, LangameAPIError
 
@@ -53,8 +53,36 @@ async def current_user(request: Request):
     if not telegram_id: raise HTTPException(401, "Telegram user is missing")
     async with SessionLocal() as session:
         user = (await session.execute(select(TelegramUser).where(TelegramUser.telegram_id == telegram_id))).scalar_one_or_none()
-        if not user or not user.active: raise HTTPException(403, "Access is not configured")
-        return user, raw_user
+        if user and user.active:
+            return user, raw_user
+
+        # Owner profiles are canonical and may open the Mini App directly before
+        # the first /start. Bootstrap only an owner profile here; admin profiles
+        # still require the existing Telegram binding/approval flow.
+        username = str(raw_user.get("username") or "").lower().replace("@", "").strip()
+        if username:
+            profile = (await session.execute(
+                select(AccessProfile).where(
+                    AccessProfile.username == username,
+                    AccessProfile.active.is_(True),
+                    AccessProfile.role == UserRole.OWNER.value,
+                )
+            )).scalar_one_or_none()
+            if profile:
+                if user is None:
+                    user = TelegramUser(
+                        telegram_id=telegram_id,
+                        role=UserRole.OWNER.value,
+                        active=True,
+                    )
+                    session.add(user)
+                else:
+                    user.role = UserRole.OWNER.value
+                    user.active = True
+                await session.commit()
+                return user, raw_user
+
+        raise HTTPException(403, "Access is not configured")
 
 
 def owner_required(user):
