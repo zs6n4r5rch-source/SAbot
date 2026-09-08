@@ -1,0 +1,1 @@
+P0-P2 checkpoint: loyalty group count runtime fix + regression test. Existing page composer remains the root composition layer. Production verification remains pending.
