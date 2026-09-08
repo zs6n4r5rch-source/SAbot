@@ -8,6 +8,8 @@ from app.db.session import SessionLocal
 from app.models import Employee, Shift, ShiftCloseReport, TelegramUser, Guest, GuestGroup, GuestGroupMember
 from app.webapp.app import current_user, owner_required, dec, iso
 
+# Admin shift API keeps the canonical double-quoted route used by the owner control tests.
+
 async def _admins(request: Request):
     user,_=await current_user(request); owner_required(user); now=datetime.now(timezone.utc); day_start=now.replace(hour=0,minute=0,second=0,microsecond=0)
     async with SessionLocal() as session:
