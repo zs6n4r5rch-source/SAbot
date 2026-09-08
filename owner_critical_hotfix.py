@@ -54,5 +54,3 @@ window.criticalStock=async function(){clear();setBottom(false);try{const d=await
         return result + script
     compose._critical_hotfixed = True
     pc.compose_page = compose
-
-install()
