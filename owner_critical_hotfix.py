@@ -42,6 +42,7 @@ def install():
 
     original = pc.compose_page
     if getattr(original, '_critical_hotfixed', False):
+        print('SAbot critical stock hotfix already installed', flush=True)
         return
 
     def compose(html: str) -> str:
@@ -54,3 +55,4 @@ window.criticalStock=async function(){clear();setBottom(false);try{const d=await
         return result + script
     compose._critical_hotfixed = True
     pc.compose_page = compose
+    print('SAbot critical stock hotfix installed', flush=True)
