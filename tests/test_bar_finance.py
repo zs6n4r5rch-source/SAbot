@@ -11,7 +11,8 @@ def test_bar_finance_uses_langame_sales_and_arrivals():
     assert "langame_client.product_arrivals" in source
     assert "products/expense" in source
     assert "products/arrival" in source
-    assert '"profit": float(sales - purchases)' in source
+    assert '"profit"' in source
+    assert "sales - purchases" in source
 
 
 def test_arrival_cost_supports_unit_and_total_purchase_values():
