@@ -51,6 +51,21 @@ def install():
 (function(){
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 window.criticalStock=async function(){clear();setBottom(false);try{const d=await api('/api/work-center-v3/critical-categories');root.innerHTML=`<section class="hero"><div class="eyebrow">СКЛАД</div><div class="hero-title">Критические остатки</div><div class="hero-sub">По категориям товаров</div></section>${(d.categories||[]).map(c=>`<section class="card"><div class="section-title">${esc(c.name)} <span class="muted">· ${c.count}</span></div>${c.items.map(x=>`<div class="row"><div class="row-main"><div class="row-title">${esc(x.product)}</div><div class="row-sub">${esc(x.club)} · минимум ${x.min_stock}</div></div><div class="row-value">${x.quantity}</div></div>`).join('')}</section>`).join('')||'<div class="empty">Критических остатков нет</div>'};root.prepend(btn('← Рабочая зона',window.workCenter,'back'))}catch(e){fail(e)}};
+/* The base index.html calls load() before injected hotfix scripts have executed.
+   Re-run the owner renderer once the Telegram user is available so the owner sees
+   the hotfixed UI instead of the legacy first paint. */
+window.__sabotOwnerHotfixBoot=function(){
+  try{
+    if(typeof me!=='undefined' && me?.role==='owner' && typeof window.home==='function'){
+      window.home();
+      return true;
+    }
+  }catch(e){console.warn('SAbot owner hotfix boot failed',e)}
+  return false;
+};
+let tries=0;
+const boot=()=>{if(window.__sabotOwnerHotfixBoot?.()||++tries>=40)return;setTimeout(boot,100)};
+setTimeout(boot,0);
 })();</script>'''
         return result + script
     compose._critical_hotfixed = True
