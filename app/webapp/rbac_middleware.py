@@ -5,8 +5,8 @@ from app.webapp.app import current_user
 
 ROLE_PATHS = {
     "owner": None,
-    "admin": ("/overview", "/summary", "/work-center", "/crm", "/warehouse", "/shifts", "/penalties", "/salary", "/admin/", "/settings"),
-    "smm": ("/overview", "/summary", "/crm", "/smm/"),
+    "admin": ("/overview", "/work-center", "/crm", "/warehouse", "/shifts", "/penalties", "/salary", "/admin/", "/settings"),
+    "smm": ("/overview", "/crm", "/smm/"),
     "guest": ("/guest/",),
 }
 
