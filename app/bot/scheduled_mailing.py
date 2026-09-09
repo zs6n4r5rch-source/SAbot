@@ -6,8 +6,10 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy import select
 
+from app.config import settings
 from app.db.session import SessionLocal
 from app.models import CampaignStatus, MarketingCampaign, TelegramUser, UserRole
+from app.services.timezone_policy import timezone_name
 
 router = Router()
 
@@ -25,14 +27,20 @@ async def schedule_mailing(message: Message):
     if not await _is_owner(message):
         await message.answer("⛔ Доступ только для владельца.")
         return
+    tz_name = timezone_name()
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz_name = "Europe/Moscow"
+        tz = ZoneInfo(tz_name)
     parts = (message.text or "").split(maxsplit=3)
     if len(parts) != 4:
-        await message.answer("Формат: /mail_schedule ID YYYY-MM-DD HH:MM\nВремя указывается по Europe/Moscow.")
+        await message.answer(f"Формат: /mail_schedule ID YYYY-MM-DD HH:MM\nВремя указывается по {tz_name}.")
         return
     try:
         campaign_id = int(parts[1])
         local_dt = datetime.strptime(f"{parts[2]} {parts[3]}", "%Y-%m-%d %H:%M")
-        scheduled_at = local_dt.replace(tzinfo=ZoneInfo("Europe/Moscow")).astimezone(ZoneInfo("UTC"))
+        scheduled_at = local_dt.replace(tzinfo=tz).astimezone(ZoneInfo("UTC"))
     except (ValueError, ZoneInfoNotFoundError):
         await message.answer("⛔ Некорректные дата/время. Используйте YYYY-MM-DD HH:MM.")
         return
@@ -49,4 +57,4 @@ async def schedule_mailing(message: Message):
         campaign.confirmed_by = message.from_user.id
         campaign.confirmed_at = datetime.now(ZoneInfo("UTC"))
         await session.commit()
-    await message.answer(f"⏰ Кампания #{campaign_id} запланирована на {local_dt:%Y-%m-%d %H:%M} Europe/Moscow.")
+    await message.answer(f"⏰ Кампания #{campaign_id} запланирована на {local_dt:%Y-%m-%d %H:%M} {tz_name}.")
