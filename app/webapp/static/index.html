@@ -16,13 +16,13 @@
 (function(){
   'use strict';
   var app=document.getElementById('app');
-  var state={page:'overview',role:''};
+  var state={page:'overview',role:'',stack:[]};
   var routes={overview:'/api/app/overview',work:'/api/app/work-center',finance:'/api/app/finance',warehouse:'/api/app/warehouse',crm:'/api/app/crm/groups',analytics:'/api/app/analytics'};
   var names={overview:'Главная',work:'Work Center',finance:'Финансы',warehouse:'Склад',crm:'CRM',analytics:'Аналитика'};
   function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function n(v){if(v==null||v==='')return '—';var x=Number(v);return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(Number.isFinite(x)?x:0);}
   function rub(v){return v==null?'—':n(v)+' ₽';}
-  function nav(){var s='<nav>';Object.keys(names).forEach(function(k){s+='<button data-page="'+k+'" class="'+(state.page===k?'active':'')+'">'+names[k]+'</button>';});return s+'</nav>';}
+  function nav(){var s='<nav>';if(state.stack.length)s+='<button data-back>← Назад</button>';Object.keys(names).forEach(function(k){s+='<button data-page="'+k+'" class="'+(state.page===k?'active':'')+'">'+names[k]+'</button>';});return s+'</nav>';}
   function shell(body){return nav()+'<div class="top"><div><div class="brand">Strike Arena</div><div class="sub">Центр управления клубом</div></div>'+(state.role?'<span class="badge">'+esc(state.role.toUpperCase())+'</span>':'')+'</div>'+body;}
   function error(text){app.innerHTML=shell('<div class="error"><h1>Ошибка загрузки</h1><p class="muted">'+esc(text)+'</p><button class="primary" data-retry>Повторить</button></div>');bind();}
   function render(d){
@@ -38,10 +38,12 @@
     if(state.page==='analytics'){var ak=d.kpi||{},c=d.comparison||{};return shell('<h1>Аналитика</h1><p class="muted">За '+n(d.days)+' дней</p><div class="grid"><div class="card"><div class="label">Выручка товаров</div><div class="value">'+rub(ak.product_revenue)+'</div></div><div class="card"><div class="label">Продано единиц</div><div class="value">'+n(ak.product_units)+'</div></div><div class="card"><div class="label">Загрузка</div><div class="value">'+(c.occupancy==null?'—':esc(c.occupancy)+'%')+'</div></div><div class="card"><div class="label">ARPU</div><div class="value">'+rub(c.arpu)+'</div></div></div>');}
     return shell('<h1>Раздел</h1>');
   }
-  function bind(){Array.prototype.forEach.call(app.querySelectorAll('[data-page]'),function(b){b.onclick=function(){load(b.getAttribute('data-page'));};});var r=app.querySelector('[data-retry]');if(r)r.onclick=function(){load(state.page);};}
+  function bind(){Array.prototype.forEach.call(app.querySelectorAll('[data-page]'),function(b){b.onclick=function(){load(b.getAttribute('data-page'));};});var back=app.querySelector('[data-back]');if(back)back.onclick=function(){var previous=state.stack.pop()||'overview';load(previous,true);};var r=app.querySelector('[data-retry]');if(r)r.onclick=function(){load(state.page,true);};}
   function getTelegram(){return window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;}
-  async function load(page){
-    state.page=page||state.page;
+  async function load(page,fromHistory){
+    page=page||state.page;
+    if(page!==state.page&&!fromHistory)state.stack.push(state.page);
+    state.page=page;
     app.innerHTML=shell('<div class="loading">Загрузка…</div>');
     try{
       var tg=getTelegram();
