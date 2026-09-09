@@ -1,0 +1,16 @@
+(function(){'use strict';
+var labels={overview:['Главная','⌂'],work:['Работа','▣'],finance:['Финансы','₽'],more:['Ещё','⋯'],warehouse:['Склад','▤'],crm:['CRM','♙'],analytics:['Аналитика','◈'],shifts:['Смены','◷'],previous:['Предыдущая смена','↶'],closeReports:['Закрытия смен','✓'],penalties:['Штрафы','!'],salary:['Зарплата','₽'],admin:['Контроль администратора','◉'],profiles:['Профили доступа','♟'],settings:['Настройки','⚙'],campaigns:['SMM','✦'],localLinks:['Telegram / consent','◌'],crmSearch:['Поиск гостей','⌕'],warehouseCritical:['Критические остатки','!'],warehouseCategories:['Категории склада','▦'],warehouseArrivals:['Приходы','↓'],warehouseSales:['Продажи товаров','↑'],warehouseHistory:['История склада','↺'],warehouseWriteoffs:['Списания','−'],warehouseInventories:['Инвентаризации','▣'],warehouseDiscrepancies:['Расхождения','△'],analyticsAdmins:['Администраторы','♟']};
+var primary=['overview','work','finance','more'];
+function app(){return document.getElementById('app');}
+function navState(){var root=app();if(!root)return '';var active=root.querySelector('nav button.active');return active?active.getAttribute('data-page'):'';}
+function go(page){var b=document.querySelector('nav [data-page="'+page+'"]');if(b)b.click();}
+function haptic(){try{window.Telegram&&Telegram.WebApp&&Telegram.WebApp.HapticFeedback&&Telegram.WebApp.HapticFeedback.impactOccurred('light');}catch(e){}}
+function ensure(){var root=app();if(!root)return;var old=root.querySelector('.sa-bottom');if(!old){var bar=document.createElement('div');bar.className='sa-bottom';primary.forEach(function(key){var b=document.createElement('button');b.type='button';b.dataset.saPage=key;b.innerHTML='<span class="sa-icon">'+labels[key][1]+'</span>'+labels[key][0];b.onclick=function(){haptic();if(key==='more'){var m=document.querySelector('.sa-more');if(m)m.classList.toggle('open');}else go(key);};bar.appendChild(b);});document.body.appendChild(bar);}
+var more=document.querySelector('.sa-more');if(!more){more=document.createElement('div');more.className='sa-more';more.innerHTML='<div class="sa-more-head"><span>Все разделы</span><button type="button" data-sa-close>Закрыть</button></div><div class="sa-more-grid"></div>';document.body.appendChild(more);more.querySelector('[data-sa-close]').onclick=function(){more.classList.remove('open');};}
+var grid=more.querySelector('.sa-more-grid');if(grid&&!grid.children.length){['warehouse','crm','analytics','shifts','previous','closeReports','penalties','salary','admin','profiles','settings','campaigns','localLinks','crmSearch'].forEach(function(key){var b=document.createElement('button');b.type='button';b.dataset.saPage=key;b.textContent=labels[key][0];b.onclick=function(){haptic();more.classList.remove('open');go(key);};grid.appendChild(b);});}
+var current=navState();document.querySelectorAll('.sa-bottom [data-sa-page]').forEach(function(b){b.classList.toggle('active',b.dataset.saPage===current);});
+}
+function decorate(){var root=app();if(!root)return;root.querySelectorAll('nav').forEach(function(n){n.setAttribute('aria-hidden','true');});ensure();}
+var mo=new MutationObserver(function(){decorate();});mo.observe(document.documentElement,{childList:true,subtree:true});
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',decorate);else decorate();
+})();
