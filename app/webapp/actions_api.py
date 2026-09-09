@@ -6,13 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models import (
-    OwnerReportSettings,
-    SalaryPayment,
-    SalaryPeriod,
-    Writeoff,
-    WriteoffStatus,
-)
+from app.models import OwnerReportSettings, SalaryPayment, SalaryPeriod, Writeoff, WriteoffStatus
 from app.permissions import Permission, require_permission
 from app.webapp.app import current_user
 
@@ -119,7 +113,7 @@ async def patch_settings(payload: ReportSettingsPatch, request: Request):
     require_permission(user.role, Permission.READ_ALL)
     if user.role != "owner":
         raise HTTPException(403, "Owner role required")
-    values: dict[str, Any] = payload.model_dump(exclude_none=True)
+    values: dict[str, Any] = payload.dict(exclude_none=True)
     async with SessionLocal() as session:
         row = await session.scalar(select(OwnerReportSettings).where(OwnerReportSettings.owner_telegram_id == user.telegram_id))
         if row is None:
