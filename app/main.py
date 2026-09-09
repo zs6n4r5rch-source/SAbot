@@ -32,6 +32,7 @@ from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
 from app.webapp.unified_api import router as unified_api_router
+from app.webapp.owner_dashboard_api import router as owner_dashboard_router
 from app.webapp.actions_api import router as actions_api_router
 from app.webapp.auth_api import router as auth_api_router
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
@@ -82,6 +83,7 @@ async def main():
     web_app.include_router(social_api_router)
     web_app.include_router(telegram_webhook_router)
     web_app.include_router(unified_api_router)
+    web_app.include_router(owner_dashboard_router)
     web_app.include_router(actions_api_router)
     web_app.include_router(auth_api_router)
     install_admin_shift_control(web_app)
