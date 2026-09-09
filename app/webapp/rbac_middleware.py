@@ -7,6 +7,7 @@ from app.models import Guest, InventoryBalance, Shift
 from app.webapp.app import current_user
 
 
+# Supported unified roles: "owner", "admin", "smm", "guest".
 ROLE_PATHS = {
     "owner": None,
     "admin": ("/overview", "/work-center", "/crm", "/warehouse", "/shifts", "/penalties", "/salary", "/admin/", "/settings"),
