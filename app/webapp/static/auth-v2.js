@@ -1,5 +1,5 @@
 (function(){'use strict';
-var originalFetch=window.fetch.bind(window),released=false,pending=[],selectedRole='';
+var originalFetch=window.fetch.bind(window),released=false,pending=[],selectedRole='',booted=false;
 var roleMeta={owner:{title:'Владелец',desc:'Полный доступ к управлению Strike Arena'},admin:{title:'Администратор',desc:'Операционная работа клуба'},smm:{title:'SMM-специалист',desc:'CRM и маркетинговые кампании'},guest:{title:'Гость',desc:'Личный кабинет гостя'}};
 var allowed={owner:['overview','work','finance','warehouse','crm','analytics','shifts','previous','closeReports','penalties','salary','admin','profiles','settings','campaigns','localLinks','crmSearch'],admin:['overview','work','warehouse','crm','shifts','previous','closeReports','penalties','salary','admin','localLinks','crmSearch'],smm:['overview','crm','campaigns','crmSearch'],guest:['guest']};
 function tg(){return window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;} function init(){var t=tg();return t&&t.initData?t.initData:'';}
@@ -12,7 +12,10 @@ async function showGuest(){var app=getApp();if(!app)return;document.querySelecto
 function filter(){var role=document.body.dataset.saRole||selectedRole;if(!role)return;var set=allowed[role]||[];document.querySelectorAll('[data-page],[data-open],[data-sa-page]').forEach(function(el){var key=el.getAttribute('data-page')||el.getAttribute('data-open')||el.getAttribute('data-sa-page');var ok=set.indexOf(key)>=0||key==='more'||(role==='owner');el.style.display=ok?'':'none';});if(role==='guest'){document.querySelectorAll('nav,.sa-bottom,.sa-more').forEach(function(el){el.style.display='none';});}}
 function releaseResponse(resp){if(!selectedRole)return resp;var type=resp.headers.get('content-type')||'';if(type.indexOf('application/json')<0)return resp;return resp.clone().text().then(function(text){try{var d=JSON.parse(text);if(d&&typeof d==='object'&&!Array.isArray(d)&&d.role)d.role=selectedRole;return new Response(JSON.stringify(d),{status:resp.status,statusText:resp.statusText,headers:resp.headers});}catch(e){return resp;}});}
 window.fetch=function(input,initOpts){var url=typeof input==='string'?input:(input&&input.url)||'';var protectedApp=/\/api\/app\/(?!auth(?:\?|\/|$))/.test(url);if(!released&&protectedApp){return new Promise(function(resolve,reject){pending.push(function(){originalFetch(input,initOpts).then(releaseResponse).then(resolve).catch(reject);});});}return originalFetch(input,initOpts).then(releaseResponse);};
-function boot(){style();var app=getApp();if(app&&!released)showAuth();filter();}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+function boot(){if(booted)return;var app=getApp();if(!app)return;booted=true;style();if(!released)showAuth();filter();}
+function waitForApp(){if(booted)return;boot();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',waitForApp,{once:true});else waitForApp();
+var bootTimer=setInterval(function(){if(booted){clearInterval(bootTimer);return;}boot();},50);
+setTimeout(function(){if(!booted)boot();},3000);
 window.addEventListener('sa:authorized',filter);
 })();
