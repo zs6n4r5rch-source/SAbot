@@ -29,7 +29,7 @@ def test_mini_app_boot_has_static_fallback_and_explicit_start_contract():
     assert "Запуск приложения" in html
     assert "window.__SA_START_APP__" in html
     assert "sa:app-state" in html
-    assert "state==='ready'" in html
+    assert "signal('ready')" in html
     assert "state.role==='guest'?'guest':'overview'" in html
 
 
@@ -50,10 +50,11 @@ def test_mini_app_javascript_syntax():
             tmp.unlink(missing_ok=True)
 
 
-def test_auth_does_not_use_text_content_timeout_gate():
+def test_auth_uses_explicit_app_bootstrap_contract():
     auth = (STATIC / "auth-v2.js").read_text(encoding="utf-8")
-    assert "textContent" not in auth
     assert "window.__SA_START_APP__" in auth
+    assert "startApplication" in auth
+    assert "setTimeout(function(){var app=document.getElementById('app')" not in auth
 
 
 def test_design_has_no_global_mutation_observer():
