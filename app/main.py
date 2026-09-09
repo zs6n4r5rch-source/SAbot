@@ -38,7 +38,7 @@ from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)
-UI_VERSION = "r1-r3-unified-9"
+UI_VERSION = "r1-r3-unified-10"
 
 def mini_app_url_with_version(url):
     base = (url or "").rstrip("/")
