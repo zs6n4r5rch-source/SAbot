@@ -82,14 +82,15 @@ def iso(v): return v.isoformat() if v else None
 
 @app.get("/")
 async def index():
-    # Never let a third-party Telegram SDK or a synchronous app asset block HTML parsing.
-    # Telegram iOS can otherwise show a completely blank WebView before <body> exists.
+    # Keep the first visible HTML independent of Telegram's network and execute
+    # the Telegram SDK before the application auth layer. This is important for
+    # Telegram iOS, where a blocking third-party script can leave a blank WebView.
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '')
-    asset_tags = '<script defer src="/static/auth-v2.js?v=4"></script><link rel="stylesheet" href="/static/design-v2.css?v=4"><script defer src="/static/design-v2.js?v=4"></script>'
-    telegram_loader = '<script defer src="https://telegram.org/js/telegram-web-app.js"></script>'
-    html = html.replace("</head>", asset_tags + "</head>")
-    html = html.replace("</body>", telegram_loader + "</body>")
+    css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=5">'
+    deferred_app = '<script defer src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/static/auth-v2.js?v=5"></script><script defer src="/static/design-v2.js?v=5"></script>'
+    html = html.replace("</head>", css_tag + "</head>")
+    html = html.replace("</body>", deferred_app + "</body>")
     response = HTMLResponse(html)
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
