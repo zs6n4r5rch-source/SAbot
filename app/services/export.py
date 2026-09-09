@@ -6,6 +6,9 @@ from openpyxl.utils import get_column_letter
 
 
 class ExportService:
+    def __init__(self, export_dir: Path | None = None):
+        self.export_dir = export_dir
+
     def build_xlsx(
         self,
         name: str,
@@ -16,7 +19,7 @@ class ExportService:
         totals: Mapping[str, Any] | None = None,
         timezone_name: str | None = None,
     ) -> Path:
-        export_dir = Path(__file__).resolve().parents[1] / "webapp" / "exports"
+        export_dir = self.export_dir or (Path(__file__).resolve().parents[1] / "webapp" / "exports")
         export_dir.mkdir(exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         safe_name = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in name).strip("_") or "export"
