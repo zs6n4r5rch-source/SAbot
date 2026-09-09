@@ -5,7 +5,7 @@ from pathlib import Path
 def test_unified_shell_has_real_states_and_back_navigation():
     source = Path('app/webapp/static/index.html').read_text(encoding='utf-8')
     assert 'Загрузка' in source
-    assert 'Ошибка' in source
+    assert 'Раздел недоступен' in source
     assert 'state.stack' in source
     assert 'previousShift' in source
 
