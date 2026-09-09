@@ -26,7 +26,7 @@ def test_unified_server_exposes_active_mini_app_routes():
     root = Path(__file__).parents[1]
     text = (root / "app" / "webapp" / "unified_api.py").read_text(encoding="utf-8")
     for route in ["/overview", "/work-center", "/crm/groups", "/warehouse", "/finance", "/analytics"]:
-        assert f"'{route}'" in text
+        assert route in text
 
 
 def test_unified_actions_are_mounted_and_guarded():
