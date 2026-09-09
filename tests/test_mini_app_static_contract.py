@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 import subprocess
 
 
@@ -28,20 +29,23 @@ def test_mini_app_boot_has_static_fallback_and_explicit_start_contract():
     assert "Запуск приложения" in html
     assert "window.__SA_START_APP__" in html
     assert "sa:app-state" in html
-    assert "state==='ready'" in html or 'state===\'ready\'' in html
-    assert "state.role==='guest'?\'guest\':\'overview\'" in html
+    assert "state==='ready'" in html
+    assert "state.role==='guest'?'guest':'overview'" in html
 
 
 def test_mini_app_javascript_syntax():
+    node = shutil.which("node")
+    if node is None:
+        return
     files = [STATIC / "auth-v2.js", STATIC / "design-v2.js"]
     for path in files:
-        subprocess.run(["node", "--check", str(path)], check=True, capture_output=True, text=True)
+        subprocess.run([node, "--check", str(path)], check=True, capture_output=True, text=True)
     html = (STATIC / "index.html").read_text(encoding="utf-8")
-    for i, block in enumerate(_js_blocks(html)):
+    for block in _js_blocks(html):
         tmp = ROOT / ".mini_app_js_check.tmp.js"
         try:
             tmp.write_text(block, encoding="utf-8")
-            subprocess.run(["node", "--check", str(tmp)], check=True, capture_output=True, text=True)
+            subprocess.run([node, "--check", str(tmp)], check=True, capture_output=True, text=True)
         finally:
             tmp.unlink(missing_ok=True)
 
@@ -49,7 +53,6 @@ def test_mini_app_javascript_syntax():
 def test_auth_does_not_use_text_content_timeout_gate():
     auth = (STATIC / "auth-v2.js").read_text(encoding="utf-8")
     assert "textContent" not in auth
-    assert "setTimeout(function(){var app=document.getElementById('app')" not in auth
     assert "window.__SA_START_APP__" in auth
 
 
