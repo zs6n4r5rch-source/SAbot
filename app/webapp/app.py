@@ -68,12 +68,14 @@ async def current_user(request: Request):
                     user.active = True
                 await session.commit()
                 return user, raw_user
-        # Every Telegram account can enter the public guest contour without staff binding.
         return SimpleNamespace(telegram_id=telegram_id, role="guest", active=True, employee_id=None), raw_user
 
 
 def owner_required(user):
     if user.role != UserRole.OWNER.value: raise HTTPException(403, "OWNER access required")
+
+def management_required(user):
+    if user.role not in (UserRole.OWNER.value, UserRole.ADMIN.value): raise HTTPException(403, "Management access required")
 
 def dec(v): return float(v or 0)
 def iso(v): return v.isoformat() if v else None
@@ -81,7 +83,7 @@ def iso(v): return v.isoformat() if v else None
 @app.get("/")
 async def index():
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    asset_tags = '<script src="/static/auth-v2.js?v=1"></script><link rel="stylesheet" href="/static/design-v2.css?v=1"><script src="/static/design-v2.js?v=1"></script>'
+    asset_tags = '<script src="/static/auth-v2.js?v=2"></script><link rel="stylesheet" href="/static/design-v2.css?v=2"><script src="/static/design-v2.js?v=2"></script>'
     html = html.replace("</head>", asset_tags + "</head>")
     response = HTMLResponse(html)
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -100,7 +102,7 @@ async def me(request: Request):
 
 @app.get("/api/summary")
 async def summary(request: Request):
-    user, _ = await current_user(request)
+    user, _ = await current_user(request); management_required(user)
     async with SessionLocal() as session:
         employees = await session.scalar(select(func.count(Employee.id)).where(Employee.active.is_(True)))
         open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None)))
@@ -129,16 +131,14 @@ async def admins(request: Request):
 
 @app.get("/api/clients")
 async def clients(request: Request, q: str = "", limit: int = 30):
-    user, _ = await current_user(request)
-    if user.role not in (UserRole.OWNER.value, UserRole.ADMIN.value): raise HTTPException(403, "Access denied")
+    user, _ = await current_user(request); management_required(user)
     try: return {"source": "langame", "data": await langame_client.guests_search(query=q or None, size=min(max(limit, 1), 100))}
     except LangameAPIError as exc:
         raise HTTPException(502, f"LANGAME clients unavailable: {exc}") from exc
 
 @app.get("/api/inventory")
 async def inventory(request: Request):
-    user, _ = await current_user(request)
-    if user.role not in (UserRole.OWNER.value, UserRole.ADMIN.value): raise HTTPException(403, "Access denied")
+    user, _ = await current_user(request); management_required(user)
     async with SessionLocal() as session:
         rows = (await session.execute(select(InventoryBalance, Product, Club).join(Product, Product.id == InventoryBalance.product_id).join(Club, Club.id == InventoryBalance.club_id).order_by(InventoryBalance.quantity.asc()).limit(100))).all()
         return {"items": [{"id": b.id, "club": c.name, "product": p.name, "quantity": dec(b.quantity), "min_stock": dec(b.min_stock), "critical": bool(b.min_stock > 0 and b.quantity <= b.min_stock), "updated_at": iso(b.updated_at)} for b,p,c in rows]}
