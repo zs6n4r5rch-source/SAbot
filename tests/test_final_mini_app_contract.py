@@ -28,6 +28,23 @@ def test_smm_can_use_crm_and_campaign_contract_without_finance_permission():
     assert '@router.post("/smm/campaigns/{campaign_id}/schedule")' in src
 
 
+def test_smm_dashboard_is_marketing_only_and_finance_is_owner_only():
+    src = (ROOT / "app/webapp/owner_dashboard_api.py").read_text(encoding="utf-8")
+    assert 'if user.role == "smm":' in src
+    assert '"marketing": {"campaigns"' in src
+    assert 'if user.role != "owner":' in src
+    assert 'raise HTTPException(403, "Finance dashboard is restricted to OWNER")' in src
+
+
+def test_smm_ui_has_no_owner_menu_or_finance_data():
+    src = (ROOT / "app/webapp/static/role-ui-v2.js").read_text(encoding="utf-8")
+    assert "Маркетинг и CRM" in src
+    assert "Контроль администраторов не входят в контур SMM" in src
+    assert "Финансы доступны только владельцу" in src
+    assert "data-smm-more" in src
+    assert "Маркетинговая аналитика" in src
+
+
 def test_guest_contour_uses_authenticated_link_and_langame_read_only_data():
     src = (ROOT / "app/webapp/final_contract_api.py").read_text(encoding="utf-8")
     assert 'GuestTelegram.telegram_user_id == user.telegram_id' in src
@@ -54,4 +71,5 @@ def test_writeoff_action_is_real_inventory_mutation_and_audited():
 def test_smm_surface_is_loaded_without_reintroducing_dom_mutation_observer():
     src = (ROOT / "app/webapp/static/design-v2.js").read_text(encoding="utf-8")
     assert "MutationObserver" not in src
+    assert "role-ui-v2.js" in src
     assert "smm-actions.js" in src
