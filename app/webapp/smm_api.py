@@ -18,8 +18,10 @@ def dec(v):
     return float(v or 0)
 
 
-async def smm_context(request: Request):
+async def smm_context(request: Request, *, owner_allowed: bool = False):
     user, tg = await current_user(request)
+    if user.role != UserRole.SMM.value and not (owner_allowed and user.role == UserRole.OWNER.value):
+        raise HTTPException(403, "SMM contour is restricted to SMM role")
     async with SessionLocal() as session:
         access = await get_smm_access(session, user.telegram_id)
     if not access:
@@ -83,8 +85,7 @@ async def smm_create_task(request: Request, payload: TaskCreate):
 
 @router.get("/api/smm/tasks/pending")
 async def smm_pending(request: Request):
-    user, _, _ = await smm_context(request)
-    if user.role != UserRole.OWNER.value: raise HTTPException(403, "OWNER access required")
+    user, _, _ = await smm_context(request, owner_allowed=True)
     async with SessionLocal() as session:
         rows = (await session.execute(select(SMMTask, Employee).join(Employee, Employee.id == SMMTask.employee_id).where(SMMTask.status == "submitted").order_by(SMMTask.submitted_at))).all()
     return {"items": [{"id": t.id, "employee": e.full_name, "title": t.title, "type": t.task_type, "quantity": dec(t.quantity), "rate": dec(t.unit_rate), "amount": dec(Decimal(t.quantity) * Decimal(t.unit_rate)), "proof": t.proof, "submitted_at": t.submitted_at.isoformat()} for t,e in rows]}
@@ -92,8 +93,7 @@ async def smm_pending(request: Request):
 
 @router.post("/api/smm/tasks/{task_id}/{action}")
 async def smm_review_task(task_id: int, action: str, request: Request):
-    user, _, _ = await smm_context(request)
-    if user.role != UserRole.OWNER.value: raise HTTPException(403, "OWNER access required")
+    user, _, _ = await smm_context(request, owner_allowed=True)
     if action not in ("approve", "reject"): raise HTTPException(400, "Unknown action")
     async with SessionLocal() as session:
         task = await session.get(SMMTask, task_id)
