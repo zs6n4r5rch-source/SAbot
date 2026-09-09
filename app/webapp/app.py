@@ -143,7 +143,9 @@ async def bar_finance(request: Request, days: int = 30):
     user, _ = await current_user(request); owner_required(user); days = min(max(days, 1), 3650)
     end = datetime.now(timezone.utc); start = end.replace(hour=0, minute=0, second=0, microsecond=0) if days == 1 else end - timedelta(days=days)
     from app.webapp.bar_finance import report
-    try: return await report(start, end)
+    try:
+        bar = await report(start, end)
+        return {"bar": bar, **bar}
     except LangameAPIError as exc: raise HTTPException(502, f"LANGAME bar finance unavailable: {exc}") from exc
 
 @app.get("/api/finance")
