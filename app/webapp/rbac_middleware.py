@@ -1,5 +1,9 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
+
+from app.db.session import SessionLocal
+from app.models import Guest, InventoryBalance, Shift
 from app.webapp.app import current_user
 
 
@@ -9,6 +13,30 @@ ROLE_PATHS = {
     "smm": ("/overview", "/crm", "/smm/"),
     "guest": ("/guest/",),
 }
+
+
+async def safe_overview(role: str):
+    async with SessionLocal() as session:
+        if role == "admin":
+            critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock)) or 0
+            open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None))) or 0
+            return {
+                "role": role,
+                "timezone": None,
+                "revenue": {"products": None, "gaming": None, "other": None, "total": None, "product_units": None},
+                "attention": ([{"key": "critical_stock", "count": critical, "title": "Критический склад", "target": "warehouse"}] if critical else []),
+                "kpi": {"guests": None, "new_guests": None, "average_check": None, "open_shifts": open_shifts},
+                "source_status": {"langame": "limited_by_role"},
+            }
+        guests = await session.scalar(select(func.count(Guest.id))) or 0
+        return {
+            "role": role,
+            "timezone": None,
+            "revenue": {"products": None, "gaming": None, "other": None, "total": None, "product_units": None},
+            "attention": [],
+            "kpi": {"guests": guests, "new_guests": None, "average_check": None, "open_shifts": None},
+            "source_status": {"langame": "marketing_contour"},
+        }
 
 
 class UnifiedRBACMiddleware:
@@ -46,4 +74,8 @@ class UnifiedRBACMiddleware:
             await response(scope, receive, send)
             return
         scope.setdefault("state", {})["unified_role"] = role
+        if path == "/api/app/overview" and role in {"admin", "smm"}:
+            response = JSONResponse(await safe_overview(role), status_code=200)
+            await response(scope, receive, send)
+            return
         await self.app(scope, receive, send)
