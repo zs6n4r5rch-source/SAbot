@@ -82,15 +82,10 @@ def iso(v): return v.isoformat() if v else None
 
 @app.get("/")
 async def index():
-    # Do not make the first paint depend on Telegram's third-party SDK.
-    # Telegram iOS can delay/block that network request; auth-v2 must render
-    # the role selector immediately and only require SDK readiness on click.
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '')
-    css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=7">'
-    # Local scripts are deferred but independent of Telegram. The SDK is async
-    # and may arrive later; auth-v2 reads it when the user selects a role.
-    deferred_app = '<script defer src="/static/auth-v2.js?v=7"></script><script defer src="/static/design-v2.js?v=7"></script><script async src="https://telegram.org/js/telegram-web-app.js"></script>'
+    css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=8">'
+    deferred_app = '<script defer src="/static/auth-v2.js?v=8"></script><script defer src="/static/design-v2.js?v=8"></script><script async src="https://telegram.org/js/telegram-web-app.js"></script>'
     html = html.replace("</head>", css_tag + "</head>")
     html = html.replace("</body>", deferred_app + "</body>")
     response = HTMLResponse(html)
