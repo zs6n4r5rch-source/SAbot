@@ -11,7 +11,7 @@ from app.services.langame import langame_client
 logger = logging.getLogger(__name__)
 
 
-async def _run_one(sync_type: str, loader) -> None:
+async def _run_one(sync_type: str, loader) -> tuple[int, str | None]:
     started = datetime.now(timezone.utc)
     async with SessionLocal() as session:
         row = LangameSyncLog(sync_type=sync_type, started_at=started, status="running", records_count=0)
@@ -31,18 +31,21 @@ async def _run_one(sync_type: str, loader) -> None:
                 row.error = None
                 await session.commit()
         logger.info("LANGAME read-only verification %s completed: %s records", sync_type, records)
+        return records, None
     except asyncio.CancelledError:
         raise
     except Exception as exc:
+        error = str(exc)[:4000]
         async with SessionLocal() as session:
             row = await session.get(LangameSyncLog, sync_id)
             if row:
                 row.finished_at = datetime.now(timezone.utc)
                 row.status = "failed"
                 row.records_count = 0
-                row.error = str(exc)[:4000]
+                row.error = error
                 await session.commit()
         logger.exception("LANGAME read-only verification %s failed", sync_type)
+        return 0, error
 
 
 def _count_records(data) -> int:
@@ -89,9 +92,53 @@ async def langame_verification_sync_once() -> None:
         ("product_sales", lambda: langame_client.product_sales(date_from, date_to)),
         ("product_arrivals", lambda: langame_client.product_arrivals(date_from, date_to)),
     )
+
+    started = datetime.now(timezone.utc)
+    async with SessionLocal() as session:
+        summary = LangameSyncLog(
+            sync_type="full",
+            started_at=started,
+            status="running",
+            records_count=0,
+        )
+        session.add(summary)
+        await session.commit()
+        summary_id = summary.id
+
+    total_records = 0
+    failures: list[str] = []
+    completed = 0
     for sync_type, loader in jobs:
-        await _run_one(sync_type, loader)
+        records, error = await _run_one(sync_type, loader)
+        total_records += records
+        completed += 1
+        if error:
+            failures.append(f"{sync_type}: {error}")
         await asyncio.sleep(0)
+
+    if not failures:
+        status = "success"
+    elif completed < len(jobs):
+        status = "failed"
+    else:
+        status = "partial"
+
+    async with SessionLocal() as session:
+        summary = await session.get(LangameSyncLog, summary_id)
+        if summary:
+            summary.finished_at = datetime.now(timezone.utc)
+            summary.status = status
+            summary.records_count = total_records
+            summary.error = "\n".join(failures)[:4000] if failures else None
+            await session.commit()
+
+    logger.info(
+        "LANGAME full read-only verification finished: status=%s contours=%s/%s records=%s",
+        status,
+        completed,
+        len(jobs),
+        total_records,
+    )
 
 
 async def langame_sync_scheduler(interval_seconds: int = 900) -> None:
