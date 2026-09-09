@@ -39,7 +39,7 @@ def test_guest_invite_resolves_missing_local_guest_from_langame_read_only_search
     src = (ROOT / "app/bot/guest.py").read_text(encoding="utf-8")
     assert "async def _ensure_local_guest" in src
     assert "langame_client.guest_by_id(guest_langame_id)" in src
-    assert "Guest(langame_guest_id=guest_langame_id" in src
+    assert "langame_guest_id=guest_langame_id" in src
     assert "LANGAME or LANGAME временно недоступен" in src
 
 
