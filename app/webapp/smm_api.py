@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 
 from app.db.session import SessionLocal
-from app.models import TelegramUser, UserRole, Employee, Guest, MarketingCampaign, Shift
+from app.models import TelegramUser, UserRole, Employee, Guest, MarketingCampaign, Shift, GuestTelegram
 from app.models.smm import SMMAccess, SMMTask, SMMTaskRate
 from app.webapp.app import current_user
 from app.services.smm import get_smm_access, has_analytics
@@ -61,6 +61,22 @@ async def smm_analytics(request: Request, days: int = 30):
         approved = await session.scalar(select(func.count(SMMTask.id)).where(SMMTask.employee_id == access.employee_id, SMMTask.status == "approved", SMMTask.submitted_at >= start)) if access.employee_id else 0
         earned = await session.scalar(select(func.coalesce(func.sum(SMMTask.quantity * SMMTask.unit_rate), 0)).where(SMMTask.employee_id == access.employee_id, SMMTask.status == "approved", SMMTask.submitted_at >= start)) if access.employee_id else 0
     return {"days": days, "guests": guests, "campaigns": campaigns, "tasks": tasks or 0, "approved_tasks": approved or 0, "earned": dec(earned)}
+
+
+@router.get("/api/smm/marketing-analytics")
+async def smm_marketing_analytics(request: Request, days: int = 30):
+    user, _, access = await smm_context(request)
+    if not (has_analytics(access, "guests") or has_analytics(access, "marketing") or has_analytics(access, "advertising")):
+        raise HTTPException(403, "Marketing analytics access is restricted")
+    days = min(max(days, 1), 365)
+    start = datetime.now(timezone.utc) - timedelta(days=days)
+    async with SessionLocal() as session:
+        guests = await session.scalar(select(func.count(Guest.id))) if has_analytics(access, "guests") else None
+        telegram_links = await session.scalar(select(func.count(GuestTelegram.id))) if has_analytics(access, "guests") else None
+        marketing_consent = await session.scalar(select(func.count(GuestTelegram.id)).where(GuestTelegram.marketing_consent.is_(True))) if has_analytics(access, "guests") else None
+        campaigns = await session.scalar(select(func.count(MarketingCampaign.id)).where(MarketingCampaign.created_at >= start)) if has_analytics(access, "marketing") else None
+        recipients = await session.scalar(select(func.count(MarketingCampaign.id)).where(MarketingCampaign.created_at >= start)) if has_analytics(access, "marketing") else None
+    return {"days": days, "guests": guests, "telegram_links": telegram_links, "marketing_consent": marketing_consent, "campaigns": campaigns, "recipient_snapshots": recipients, "source": "local CRM + marketing"}
 
 
 @router.get("/api/smm/tasks")
