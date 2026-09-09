@@ -84,8 +84,8 @@ def iso(v): return v.isoformat() if v else None
 async def index():
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '')
-    css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=8">'
-    deferred_app = '<script defer src="/static/auth-v2.js?v=8"></script><script defer src="/static/design-v2.js?v=8"></script><script async src="https://telegram.org/js/telegram-web-app.js"></script>'
+    css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=9">'
+    deferred_app = '<script defer src="/static/auth-v2.js?v=9"></script><script defer src="/static/design-v2.js?v=9"></script><script async src="https://telegram.org/js/telegram-web-app.js"></script>'
     html = html.replace("</head>", css_tag + "</head>")
     html = html.replace("</body>", deferred_app + "</body>")
     response = HTMLResponse(html)
