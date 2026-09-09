@@ -20,7 +20,9 @@ def dec(v):
 
 async def smm_context(request: Request, *, owner_allowed: bool = False):
     user, tg = await current_user(request)
-    if user.role != UserRole.SMM.value and not (owner_allowed and user.role == UserRole.OWNER.value):
+    if user.role == UserRole.OWNER.value and owner_allowed:
+        return user, tg, None
+    if user.role != UserRole.SMM.value:
         raise HTTPException(403, "SMM contour is restricted to SMM role")
     async with SessionLocal() as session:
         access = await get_smm_access(session, user.telegram_id)
