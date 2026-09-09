@@ -13,4 +13,5 @@ var current=navState();document.querySelectorAll('.sa-bottom [data-sa-page]').fo
 function decorate(){var root=app();if(!root)return;root.querySelectorAll('nav').forEach(function(n){n.setAttribute('aria-hidden','true');});ensure();}
 var mo=new MutationObserver(function(){decorate();});mo.observe(document.documentElement,{childList:true,subtree:true});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',decorate);else decorate();
+if(!document.querySelector('script[data-actions-v2]')){var s=document.createElement('script');s.src='/static/actions-v2.js?v=1';s.async=false;s.dataset.actionsV2='1';document.head.appendChild(s);}
 })();
