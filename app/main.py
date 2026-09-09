@@ -32,6 +32,7 @@ from app.webapp.social_api import router as social_api_router
 from app.webapp.unified_api import router as unified_api_router
 from app.webapp.owner_dashboard_api import router as owner_dashboard_router
 from app.webapp.final_contract_api import router as final_contract_router
+from app.webapp.guest_invites_api import router as guest_invites_router
 from app.webapp.actions_api import router as actions_api_router
 from app.webapp.auth_api import router as auth_api_router
 from app.webapp.rbac_middleware import UnifiedRBACMiddleware
@@ -89,6 +90,7 @@ async def main():
     # Final contract routes are registered before the legacy unified router so
     # role-specific subject scoping wins over older broad read endpoints.
     web_app.include_router(final_contract_router)
+    web_app.include_router(guest_invites_router)
     web_app.include_router(unified_api_router)
     web_app.include_router(actions_api_router)
     web_app.include_router(auth_api_router)
