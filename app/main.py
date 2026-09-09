@@ -33,11 +33,12 @@ from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
 from app.webapp.unified_api import router as unified_api_router
 from app.webapp.actions_api import router as actions_api_router
+from app.webapp.auth_api import router as auth_api_router
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)
-UI_VERSION = "r1-r3-unified-4"
+UI_VERSION = "r1-r3-unified-5"
 
 def mini_app_url_with_version(url):
     base = (url or "").rstrip("/")
@@ -82,6 +83,7 @@ async def main():
     web_app.include_router(telegram_webhook_router)
     web_app.include_router(unified_api_router)
     web_app.include_router(actions_api_router)
+    web_app.include_router(auth_api_router)
     install_admin_shift_control(web_app)
     web_app.add_middleware(UnifiedRBACMiddleware)
 
