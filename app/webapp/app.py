@@ -78,7 +78,10 @@ def iso(v): return v.isoformat() if v else None
 
 @app.get("/")
 async def index():
-    response = HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    asset_tags = '<link rel="stylesheet" href="/static/design-v2.css?v=1"><script src="/static/design-v2.js?v=1"></script>'
+    html = html.replace("</head>", asset_tags + "</head>")
+    response = HTMLResponse(html)
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     return response
