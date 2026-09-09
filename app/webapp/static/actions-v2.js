@@ -8,9 +8,9 @@ function rub(v){return v==null?'—':n(v)+' ₽';}
 function initData(){var t=tg();if(!t)throw Error('Telegram WebApp SDK не загрузился');try{t.ready();t.expand();}catch(e){}if(!t.initData)throw Error('Telegram initData не получен. Откройте Mini App из Telegram.');return t.initData;}
 async function request(path,method,payload){var init=initData(),opts={method:method||'GET',headers:{'X-Telegram-Init-Data':init,'Accept':'application/json'},cache:'no-store'};if(payload!==undefined){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(payload);}var r=await fetch(path,opts),text=await r.text(),d={};try{d=text?JSON.parse(text):{};}catch(e){throw Error('Некорректный ответ сервера HTTP '+r.status);}if(!r.ok)throw Error(d.detail||('HTTP '+r.status));return d;}
 function go(page){var b=document.querySelector('nav [data-page="'+page+'"]');if(b)b.click();}
-function currentPage(){var b=document.querySelector('nav button.active');return b?b.getAttribute('data-page'):'overview';}
+function currentPage(){var b=document.querySelector('nav button.primary');return b?b.getAttribute('data-page'):'overview';}
 function haptic(){try{var t=tg();if(t&&t.HapticFeedback)t.HapticFeedback.impactOccurred('light');}catch(e){}}
-function busy(on){state.busy=on;root().querySelectorAll('[data-sa-action], [data-sa-save]').forEach(function(b){b.disabled=on;});}
+function busy(on){state.busy=on;var r=root();if(r)r.querySelectorAll('[data-sa-action], [data-sa-save]').forEach(function(b){b.disabled=on;});}
 function toast(msg,ok){var old=document.querySelector('.sa-toast');if(old)old.remove();var el=document.createElement('div');el.className='sa-toast';el.textContent=msg;el.dataset.ok=ok?'1':'0';document.body.appendChild(el);setTimeout(function(){el.remove();},2600);}
 function frame(title,body){return '<button type="button" data-sa-back>← Назад</button><h1>'+esc(title)+'</h1>'+body;}
 function goBack(){go(state.returnPage||'overview');}
