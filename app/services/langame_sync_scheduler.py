@@ -2,8 +2,6 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import select, func
-
 from app.db.session import SessionLocal
 from app.models import LangameSyncLog
 from app.services.langame import langame_client
@@ -84,7 +82,7 @@ async def langame_verification_sync_once() -> None:
         ("users", langame_client.users),
         ("shifts", langame_client.shifts),
         ("products", langame_client.products),
-        ("balances", langame_client.balances),
+        ("balances", lambda: langame_client.balances(date_from, date_to)),
         ("guest_groups", langame_client.guest_groups),
         ("guest_sessions", lambda: langame_client.guest_sessions(date_from, date_to)),
         ("transactions", lambda: langame_client.transactions(date_from, date_to)),
@@ -95,12 +93,7 @@ async def langame_verification_sync_once() -> None:
 
     started = datetime.now(timezone.utc)
     async with SessionLocal() as session:
-        summary = LangameSyncLog(
-            sync_type="full",
-            started_at=started,
-            status="running",
-            records_count=0,
-        )
+        summary = LangameSyncLog(sync_type="full", started_at=started, status="running", records_count=0)
         session.add(summary)
         await session.commit()
         summary_id = summary.id
@@ -116,13 +109,7 @@ async def langame_verification_sync_once() -> None:
             failures.append(f"{sync_type}: {error}")
         await asyncio.sleep(0)
 
-    if not failures:
-        status = "success"
-    elif completed < len(jobs):
-        status = "failed"
-    else:
-        status = "partial"
-
+    status = "success" if not failures else "partial" if completed == len(jobs) else "failed"
     async with SessionLocal() as session:
         summary = await session.get(LangameSyncLog, summary_id)
         if summary:
@@ -132,13 +119,7 @@ async def langame_verification_sync_once() -> None:
             summary.error = "\n".join(failures)[:4000] if failures else None
             await session.commit()
 
-    logger.info(
-        "LANGAME full read-only verification finished: status=%s contours=%s/%s records=%s",
-        status,
-        completed,
-        len(jobs),
-        total_records,
-    )
+    logger.info("LANGAME full read-only verification finished: status=%s contours=%s/%s records=%s", status, completed, len(jobs), total_records)
 
 
 async def langame_sync_scheduler(interval_seconds: int = 900) -> None:
