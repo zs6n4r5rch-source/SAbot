@@ -26,13 +26,12 @@ from app.services.polling_lock import PollingLock
 from app.services.telegram_webhook import router as telegram_webhook_router, setup_webhook
 from app.db.session import engine, SessionLocal
 from app.webapp.app import app as web_app
-from app.webapp.admin_shift_control import install as install_admin_shift_control
-from app.webapp.rbac_middleware import UnifiedRBACMiddleware
 from app.webapp.statistics_api import router as statistics_router
 from app.webapp.smm_api import router as smm_api_router
 from app.webapp.social_api import router as social_api_router
 from app.webapp.unified_api import router as unified_api_router
 from app.webapp.owner_dashboard_api import router as owner_dashboard_router
+from app.webapp.final_contract_api import router as final_contract_router
 from app.webapp.actions_api import router as actions_api_router
 from app.webapp.auth_api import router as auth_api_router
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
@@ -41,11 +40,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(
 logger = logging.getLogger(__name__)
 UI_VERSION = "r1-r3-unified-11"
 
+
 def mini_app_url_with_version(url):
     base = (url or "").rstrip("/")
     if not base:
         return base
     return base + ("&" if "?" in base else "?") + "ui=" + UI_VERSION
+
 
 async def provision_staff():
     async with SessionLocal() as session:
@@ -53,6 +54,7 @@ async def provision_staff():
         await session.commit()
         if created:
             logger.info("Provisioned %s real staff access profiles", created)
+
 
 async def main():
     await provision_staff()
@@ -83,10 +85,12 @@ async def main():
     web_app.include_router(social_api_router)
     web_app.include_router(telegram_webhook_router)
     web_app.include_router(owner_dashboard_router)
+    # Final contract routes are registered before the legacy unified router so
+    # role-specific subject scoping wins over older broad read endpoints.
+    web_app.include_router(final_contract_router)
     web_app.include_router(unified_api_router)
     web_app.include_router(actions_api_router)
     web_app.include_router(auth_api_router)
-    install_admin_shift_control(web_app)
     web_app.add_middleware(UnifiedRBACMiddleware)
 
     webhook_mode = bool(os.getenv("RENDER_EXTERNAL_URL"))
@@ -120,6 +124,7 @@ async def main():
                 await task
             except asyncio.CancelledError:
                 pass
+
 
 if __name__ == "__main__":
     asyncio.run(main())
