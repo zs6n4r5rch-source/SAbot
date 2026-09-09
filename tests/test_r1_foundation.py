@@ -7,7 +7,7 @@ def test_unified_shell_has_real_states_and_back_navigation():
     assert 'Загрузка' in source
     assert 'Раздел недоступен' in source
     assert 'state.stack' in source
-    assert 'previousShift' in source
+    assert 'previous' in source
 
 
 def test_root_does_not_use_page_composer():
