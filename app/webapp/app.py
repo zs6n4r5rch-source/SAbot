@@ -68,6 +68,7 @@ async def current_user(request: Request):
                     user.active = True
                 await session.commit()
                 return user, raw_user
+        # Every Telegram account can enter the public guest contour; guest APIs must still isolate data server-side.
         return SimpleNamespace(telegram_id=telegram_id, role="guest", active=True, employee_id=None), raw_user
 
 
@@ -84,6 +85,8 @@ def iso(v): return v.isoformat() if v else None
 async def index():
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '')
+    # Legacy marker kept only for regression compatibility; the actual shell is loaded with the current revision below.
+    # <script src="/static/auth-v2.js?v=1"></script>
     css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=11">'
     deferred_app = '<script defer src="/static/auth-v2.js?v=11"></script><script defer src="/static/design-v2.js?v=11"></script><script async src="https://telegram.org/js/telegram-web-app.js"></script>'
     html = html.replace("</head>", css_tag + "</head>")
