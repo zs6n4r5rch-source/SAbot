@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import parse_qsl
+from types import SimpleNamespace
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
@@ -67,7 +68,8 @@ async def current_user(request: Request):
                     user.active = True
                 await session.commit()
                 return user, raw_user
-        raise HTTPException(403, "Access is not configured")
+        # Every Telegram account can enter the public guest contour without staff binding.
+        return SimpleNamespace(telegram_id=telegram_id, role="guest", active=True, employee_id=None), raw_user
 
 
 def owner_required(user):
@@ -79,7 +81,7 @@ def iso(v): return v.isoformat() if v else None
 @app.get("/")
 async def index():
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    asset_tags = '<link rel="stylesheet" href="/static/design-v2.css?v=1"><script src="/static/design-v2.js?v=1"></script>'
+    asset_tags = '<script src="/static/auth-v2.js?v=1"></script><link rel="stylesheet" href="/static/design-v2.css?v=1"><script src="/static/design-v2.js?v=1"></script>'
     html = html.replace("</head>", asset_tags + "</head>")
     response = HTMLResponse(html)
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
