@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 
 from app.db.session import SessionLocal
-from app.models import TelegramUser, UserRole, Employee, Guest, MarketingCampaign, Shift, GuestTelegram
+from app.models import TelegramUser, UserRole, Employee, Guest, MarketingCampaign, Shift, GuestTelegram, MarketingRecipient
 from app.models.smm import SMMAccess, SMMTask, SMMTaskRate
 from app.webapp.app import current_user
 from app.services.smm import get_smm_access, has_analytics
@@ -75,7 +75,7 @@ async def smm_marketing_analytics(request: Request, days: int = 30):
         telegram_links = await session.scalar(select(func.count(GuestTelegram.id))) if has_analytics(access, "guests") else None
         marketing_consent = await session.scalar(select(func.count(GuestTelegram.id)).where(GuestTelegram.marketing_consent.is_(True))) if has_analytics(access, "guests") else None
         campaigns = await session.scalar(select(func.count(MarketingCampaign.id)).where(MarketingCampaign.created_at >= start)) if has_analytics(access, "marketing") else None
-        recipients = await session.scalar(select(func.count(MarketingCampaign.id)).where(MarketingCampaign.created_at >= start)) if has_analytics(access, "marketing") else None
+        recipients = await session.scalar(select(func.count(MarketingRecipient.id)).where(MarketingRecipient.created_at >= start)) if has_analytics(access, "marketing") else None
     return {"days": days, "guests": guests, "telegram_links": telegram_links, "marketing_consent": marketing_consent, "campaigns": campaigns, "recipient_snapshots": recipients, "source": "local CRM + marketing"}
 
 
