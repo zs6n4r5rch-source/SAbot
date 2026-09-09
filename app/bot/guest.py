@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.services.audit import write_audit
 from app.models import Guest, GuestLinkToken, GuestTelegram
+from app.services.langame import LangameAPIError, langame_client
 
 router = Router()
 TOKEN_TTL = timedelta(days=7)
@@ -21,10 +22,64 @@ def consent_keyboard(token: str) -> InlineKeyboardMarkup:
     ])
 
 
+def _rows_of(payload) -> list[dict]:
+    if isinstance(payload, list):
+        return [x for x in payload if isinstance(x, dict)]
+    if not isinstance(payload, dict):
+        return []
+    for key in ("data", "items", "results", "rows"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [x for x in value if isinstance(x, dict)]
+    return []
+
+
+async def _ensure_local_guest(guest_langame_id: int) -> Guest | None:
+    """Resolve a LANGAME guest into the local identity cache without writing to LANGAME."""
+    async with SessionLocal() as session:
+        guest = (await session.execute(
+            select(Guest).where(Guest.langame_guest_id == guest_langame_id)
+        )).scalar_one_or_none()
+        if guest is not None:
+            return guest
+
+        try:
+            payload = await langame_client.guest_by_id(guest_langame_id)
+        except LangameAPIError:
+            return None
+        rows = _rows_of(payload)
+        data = rows[0] if rows else None
+        if not data:
+            return None
+
+        remote_id = data.get("guest_id", data.get("id", guest_langame_id))
+        try:
+            remote_id = int(remote_id)
+        except (TypeError, ValueError):
+            remote_id = guest_langame_id
+        if remote_id != guest_langame_id:
+            return None
+
+        guest = Guest(
+            langame_guest_id=guest_langame_id,
+            fio=data.get("fio") or data.get("name") or data.get("full_name"),
+            phone=data.get("phone"),
+            is_temp=bool(data.get("temp", data.get("is_temp", False))),
+            is_virtual=False,
+        )
+        session.add(guest)
+        await session.commit()
+        return guest
+
+
 async def create_invite(message: Message, guest_langame_id: int) -> str | None:
+    guest = await _ensure_local_guest(guest_langame_id)
+    if guest is None:
+        return None
+
     token = secrets.token_urlsafe(32)
     async with SessionLocal() as session:
-        guest = (await session.execute(select(Guest).where(Guest.langame_guest_id == guest_langame_id))).scalar_one_or_none()
+        guest = await session.get(Guest, guest.id)
         if guest is None:
             return None
         # Old unused tokens for the same guest are invalidated by marking them used.
@@ -95,7 +150,7 @@ async def guest_invite(message: Message):
         return
     url = await create_invite(message, gid)
     if not url:
-        await message.answer("❌ Клиент не найден в локальном кэше. Сначала найдите его через LANGAME.")
+        await message.answer("❌ Клиент не найден в LANGAME или LANGAME временно недоступен. Проверьте ID клиента.")
         return
     await message.answer(f"🔗 Одноразовая ссылка для клиента #{gid} (действует 7 дней):\n{url}\n\nПередайте её самому клиенту.")
 
