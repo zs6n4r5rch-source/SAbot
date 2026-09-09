@@ -35,6 +35,14 @@ def test_guest_contour_uses_authenticated_link_and_langame_read_only_data():
     assert "langame_client.guest_sessions" in src
 
 
+def test_writeoff_action_is_real_inventory_mutation_and_audited():
+    src = (ROOT / "app/webapp/actions_api.py").read_text(encoding="utf-8")
+    assert "balance.quantity -= item.quantity" in src
+    assert 'operation_type="writeoff"' in src
+    assert 'action="approve_writeoff"' in src
+    assert "Insufficient stock" in src
+
+
 def test_smm_surface_is_loaded_without_reintroducing_dom_mutation_observer():
     src = (ROOT / "app/webapp/static/design-v2.js").read_text(encoding="utf-8")
     assert "MutationObserver" not in src
