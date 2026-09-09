@@ -3,9 +3,17 @@
 /* Last-resort Mini App bootstrap. The main shell normally defines __SA_START_APP__ inline.
    If that script is blocked or fails to parse, keep the authenticated user inside a
    functional shell instead of leaving the auth gate in a dead state. */
-if (typeof window.__SA_START_APP__ === 'function') return;
 var app=document.getElementById('app');
 if(!app) return;
+window.addEventListener('sa:app-state',function(ev){
+  var d=ev&&ev.detail||{};
+  if(d.state!=='error'||d.page!=='guest') return;
+  var msg=String(d.message||'');
+  if(msg.indexOf('Guest profile is not linked')===-1) return;
+  var bottom='<nav class="bottom"><button type="button" class="active"><span class="ico">⌂</span>Главная</button><button type="button"><span class="ico">▣</span>Работа</button><button type="button"><span class="ico">₽</span>Финансы</button><button type="button"><span class="ico">•••</span>Ещё</button></nav>';
+  app.innerHTML='<header class="app-header"><div class="brand-row"><span class="mark"></span><div style="min-width:0"><div class="brand-name">Strike Arena</div><div class="small">Единый центр управления клубом</div></div></div><span class="role">GUEST</span></header><div class="section-head"><h1>Мой профиль</h1><p>Личный контур гостя</p></div><div class="error"><h2>Профиль ещё не привязан</h2><p>Этот Telegram не связан с карточкой гостя клуба.</p><p class="small">Попросите владельца клуба создать персональную ссылку через команду <b>/guest_invite LANGAME_GUEST_ID</b> и откройте её в Telegram.</p><p class="small">После привязки снова откройте «Мой профиль». Данные гостя берутся из LANGAME, а Telegram-привязка хранится локально.</p></div>'+bottom;
+},false);
+if (typeof window.__SA_START_APP__ === 'function') return;
 var state={role:'guest',page:'overview',stack:[],days:30};
 var routes={
  overview:'/api/app/overview',work:'/api/app/work-center',finance:'/api/app/finance',warehouse:'/api/app/warehouse',crm:'/api/app/crm/groups',crmSearch:'/api/app/crm',localLinks:'/api/app/crm/local-links',analytics:'/api/app/analytics',shifts:'/api/app/shifts',previous:'/api/app/shifts/previous',closeReports:'/api/app/shifts/close-reports',penalties:'/api/app/penalties',salary:'/api/app/salary',admin:'/api/app/admin/me',profiles:'/api/app/admin/profiles',settings:'/api/app/settings',campaigns:'/api/app/smm/campaigns',guest:'/api/app/guest/me',warehouseCritical:'/api/app/warehouse/critical',warehouseCategories:'/api/app/warehouse/categories',warehouseArrivals:'/api/app/warehouse/arrivals',warehouseSales:'/api/app/warehouse/sales',warehouseHistory:'/api/app/warehouse/history',warehouseWriteoffs:'/api/app/warehouse/writeoffs',warehouseInventories:'/api/app/warehouse/inventories',warehouseDiscrepancies:'/api/app/warehouse/discrepancies'
