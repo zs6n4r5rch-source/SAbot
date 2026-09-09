@@ -1,8 +1,8 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.db.session import SessionLocal
 from app.models import LangameSyncLog
@@ -30,16 +30,19 @@ async def _run_one(sync_type: str, loader) -> None:
                 row.records_count = records
                 row.error = None
                 await session.commit()
-        logger.info("LANGAME verification sync %s completed: %s records", sync_type, records)
+        logger.info("LANGAME read-only verification %s completed: %s records", sync_type, records)
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
         async with SessionLocal() as session:
             row = await session.get(LangameSyncLog, sync_id)
             if row:
                 row.finished_at = datetime.now(timezone.utc)
                 row.status = "failed"
+                row.records_count = 0
                 row.error = str(exc)[:4000]
                 await session.commit()
-        logger.exception("LANGAME verification sync %s failed", sync_type)
+        logger.exception("LANGAME read-only verification %s failed", sync_type)
 
 
 def _count_records(data) -> int:
@@ -52,19 +55,39 @@ def _count_records(data) -> int:
         if isinstance(value, list):
             return len(value)
         if isinstance(value, dict):
-            for nested in ("items", "results", "records", "rows"):
-                if isinstance(value.get(nested), list):
-                    return len(value[nested])
+            for nested in ("items", "data", "results", "records", "rows"):
+                nested_value = value.get(nested)
+                if isinstance(nested_value, list):
+                    return len(nested_value)
     return 1 if data else 0
 
 
+def _window(days: int = 1) -> tuple[str, str]:
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=days)
+    return start.date().isoformat(), end.date().isoformat()
+
+
 async def langame_verification_sync_once() -> None:
+    """Verify every production LANGAME contour used by the application.
+
+    This job intentionally never writes to LANGAME and never treats a successful
+    HTTP response as a valid payload without parsing its JSON shape. PostgreSQL
+    stores only the audit outcome/count; LANGAME remains the source of truth.
+    """
+    date_from, date_to = _window(1)
     jobs = (
         ("clubs", langame_client.clubs),
         ("users", langame_client.users),
         ("shifts", langame_client.shifts),
         ("products", langame_client.products),
+        ("balances", langame_client.balances),
         ("guest_groups", langame_client.guest_groups),
+        ("guest_sessions", lambda: langame_client.guest_sessions(date_from, date_to)),
+        ("transactions", lambda: langame_client.transactions(date_from, date_to)),
+        ("operations_log", lambda: langame_client.all_operations_log(date_from, date_to)),
+        ("product_sales", lambda: langame_client.product_sales(date_from, date_to)),
+        ("product_arrivals", lambda: langame_client.product_arrivals(date_from, date_to)),
     )
     for sync_type, loader in jobs:
         await _run_one(sync_type, loader)
@@ -72,11 +95,7 @@ async def langame_verification_sync_once() -> None:
 
 
 async def langame_sync_scheduler(interval_seconds: int = 900) -> None:
-    """Continuously audit the health/shape of LANGAME read-only datasets.
-
-    This is deliberately read-only: it records the response count and outcome in
-    PostgreSQL without changing anything in LANGAME.
-    """
+    """Continuously audit the health/shape of all LANGAME read-only datasets."""
     while True:
         try:
             await langame_verification_sync_once()
