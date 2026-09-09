@@ -6,7 +6,6 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models import SalaryPeriod, SalaryViolation, Shift
-from app.services.langame import langame_client
 from app.services.timezone_policy import local_day_bounds, timezone_name
 from app.webapp.app import current_user
 from app.webapp.unified_api import product_sales_totals
@@ -18,7 +17,7 @@ def money(value):
     return float(Decimal(str(value or 0)))
 
 
-@router.get("/owner-overview")
+@router.get("/overview")
 async def owner_overview(request: Request):
     user, _ = await current_user(request)
     start, end = local_day_bounds()
@@ -41,7 +40,7 @@ async def owner_overview(request: Request):
     }
 
 
-@router.get("/finance-dashboard")
+@router.get("/finance")
 async def finance_dashboard(request: Request, days: int = 30):
     user, _ = await current_user(request)
     days = min(max(days, 1), 365)
@@ -64,5 +63,5 @@ async def finance_dashboard(request: Request, days: int = 30):
         "products": {"revenue": products, "units": units, "cogs": None, "profit": None, "margin": None},
         "expenses": {"salary": money(salary), "penalties": money(penalties)},
         "net_before_other": till - money(salary) - money(penalties),
-        "source_note": "Касса — локальные закрытые/открытые смены; продажи товаров — LANGAME. COGS и gaming показываются только после подтверждения источника.",
+        "source_note": "Касса — локальные смены; продажи товаров — LANGAME. COGS и gaming показываются только после подтверждения источника.",
     }
