@@ -34,6 +34,7 @@ from app.webapp.owner_dashboard_api import router as owner_dashboard_router
 from app.webapp.final_contract_api import router as final_contract_router
 from app.webapp.actions_api import router as actions_api_router
 from app.webapp.auth_api import router as auth_api_router
+from app.webapp.rbac_middleware import UnifiedRBACMiddleware
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
