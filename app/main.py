@@ -17,7 +17,10 @@ from app.bot.start import router as start_router
 from app.bot.handlers import router
 from app.bot.shift_closing import router as shift_closing_router, shift_close_scheduler
 from app.bot.restart import router as restart_router
+from app.bot.scheduled_mailing import router as scheduled_mailing_router
 from app.services.langame import langame_client
+from app.services.langame_sync_scheduler import langame_sync_scheduler
+from app.services.marketing_scheduler import marketing_scheduler
 from app.services.staff_access import ensure_real_staff_profiles
 from app.services.polling_lock import PollingLock
 from app.services.telegram_webhook import router as telegram_webhook_router, setup_webhook
@@ -70,6 +73,7 @@ async def main():
     dp.include_router(inventory_quality_router)
     dp.include_router(router)
     dp.include_router(shift_closing_router)
+    dp.include_router(scheduled_mailing_router)
     dp.include_router(restart_router)
 
     web_app.include_router(statistics_router)
@@ -88,6 +92,8 @@ async def main():
     from app.bot.daily_owner_report import daily_report_scheduler
     report_task = asyncio.create_task(daily_report_scheduler(bot))
     shift_close_task = asyncio.create_task(shift_close_scheduler(bot))
+    marketing_task = asyncio.create_task(marketing_scheduler(bot))
+    langame_sync_task = asyncio.create_task(langame_sync_scheduler())
     polling_lock = PollingLock()
     try:
         logger.info("Starting SAbot (webhook=%s)...", webhook_mode)
@@ -103,9 +109,9 @@ async def main():
         web_server.should_exit = True
         if not web_task.done():
             await web_task
-        report_task.cancel()
-        shift_close_task.cancel()
-        for task in (report_task, shift_close_task):
+        for task in (report_task, shift_close_task, marketing_task, langame_sync_task):
+            task.cancel()
+        for task in (report_task, shift_close_task, marketing_task, langame_sync_task):
             try:
                 await task
             except asyncio.CancelledError:
