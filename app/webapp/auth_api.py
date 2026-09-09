@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
@@ -17,6 +16,9 @@ ROLE_LABELS = {
     "guest": "Гость",
 }
 
+STAFF_ROLES = (UserRole.OWNER.value, UserRole.ADMIN.value, UserRole.SMM.value)
+
+
 @router.get("/auth")
 async def authorize(request: Request, role: str):
     pairs = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""))
@@ -31,14 +33,29 @@ async def authorize(request: Request, role: str):
     async with SessionLocal() as session:
         user = (await session.execute(select(TelegramUser).where(TelegramUser.telegram_id == telegram_id))).scalar_one_or_none()
         actual = user.role if user and user.active else None
-        if actual is None and username:
-            profile = (await session.execute(select(AccessProfile).where(AccessProfile.username == username, AccessProfile.active.is_(True), AccessProfile.role == UserRole.OWNER.value))).scalar_one_or_none()
+
+        # Owner-controlled AccessProfile is the source of the staff binding.
+        # On the first Mini App login, materialize that binding into TelegramUser.
+        if username and actual is None:
+            profile = (await session.execute(
+                select(AccessProfile).where(
+                    AccessProfile.username == username,
+                    AccessProfile.active.is_(True),
+                    AccessProfile.role.in_(STAFF_ROLES),
+                )
+            )).scalar_one_or_none()
             if profile:
-                actual = UserRole.OWNER.value
+                actual = profile.role
                 if user is None:
-                    user = TelegramUser(telegram_id=telegram_id, role=actual, active=True)
+                    user = TelegramUser(telegram_id=telegram_id, role=actual, active=True, employee_id=profile.employee_id)
                     session.add(user)
-                    await session.commit()
+                else:
+                    user.role = actual
+                    user.active = True
+                    if profile.employee_id:
+                        user.employee_id = profile.employee_id
+                await session.commit()
+
         if role == "guest":
             return {"role": "guest", "actual_role": actual or "guest", "preview": False, "label": ROLE_LABELS["guest"]}
         if role not in ROLE_LABELS or actual != role:
