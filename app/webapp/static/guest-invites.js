@@ -6,6 +6,11 @@
 
   function tg(){return window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;}
   function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function isOwner(){
+    if(window.__SA_INVITE_OWNER__)return true;
+    var role=document.querySelector('.role');
+    return !!(role&&role.textContent.trim().toLowerCase()==='owner');
+  }
   function api(path,options){
     var t=tg();
     if(!t||!t.initData)throw Error('Telegram initData не получен');
@@ -54,8 +59,7 @@
     }).catch(function(e){out.innerHTML='<div class="error"><h2>Не удалось создать инвайты</h2><p>'+esc(e.message||e)+'</p><button type="button" class="primary" id="retryBulkInvites">Повторить</button></div>';var r=document.getElementById('retryBulkInvites');if(r)r.onclick=create;}).finally(function(){if(button){button.disabled=false;button.textContent='Создать инвайты для всех гостей';}});
   }
   function mountButton(){
-    if(!window.__SA_INVITE_OWNER__)return;
-    var group=document.querySelector('.drawer-group-title');
+    if(!isOwner())return;
     var groups=document.querySelectorAll('.drawer-group');
     for(var i=0;i<groups.length;i++){
       var title=groups[i].querySelector('.drawer-group-title');
@@ -66,7 +70,7 @@
   }
   document.addEventListener('click',function(ev){
     var more=ev.target.closest&&ev.target.closest('[data-more]');
-    if(more&&window.__SA_INVITE_OWNER__)setTimeout(mountButton,0);
+    if(more&&isOwner())setTimeout(mountButton,0);
     var invite=ev.target.closest&&ev.target.closest('[data-owner-invites]');
     if(invite){ev.preventDefault();ev.stopImmediatePropagation();renderPage();}
   },true);
@@ -74,4 +78,5 @@
     window.__SA_INVITE_OWNER__=ev.detail&&ev.detail.role==='owner';
     if(window.__SA_INVITE_OWNER__&&ev.detail.state==='ready')setTimeout(mountButton,0);
   });
+  setTimeout(mountButton,300);
 }());
