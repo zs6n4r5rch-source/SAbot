@@ -36,6 +36,14 @@ def test_smm_dashboard_is_marketing_only_and_finance_is_owner_only():
     assert 'raise HTTPException(403, "Finance dashboard is restricted to OWNER")' in src
 
 
+def test_smm_marketing_analytics_excludes_financial_and_task_earnings_data():
+    src = (ROOT / "app/webapp/smm_api.py").read_text(encoding="utf-8")
+    assert '@router.get("/api/smm/marketing-analytics")' in src
+    assert '"marketing_consent": marketing_consent' in src
+    assert '"recipient_snapshots": recipients' in src
+    assert '@router.get("/api/smm/analytics")' in src  # legacy SMM task contour remains separate
+
+
 def test_smm_ui_has_no_owner_menu_or_finance_data():
     src = (ROOT / "app/webapp/static/role-ui-v2.js").read_text(encoding="utf-8")
     assert "Маркетинг и CRM" in src
