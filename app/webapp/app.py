@@ -82,13 +82,15 @@ def iso(v): return v.isoformat() if v else None
 
 @app.get("/")
 async def index():
-    # Keep the first visible HTML independent of Telegram's network and execute
-    # the Telegram SDK before the application auth layer. This is important for
-    # Telegram iOS, where a blocking third-party script can leave a blank WebView.
+    # Do not make the first paint depend on Telegram's third-party SDK.
+    # Telegram iOS can delay/block that network request; auth-v2 must render
+    # the role selector immediately and only require SDK readiness on click.
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '')
-    css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=5">'
-    deferred_app = '<script defer src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/static/auth-v2.js?v=5"></script><script defer src="/static/design-v2.js?v=5"></script>'
+    css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=6">'
+    # Local scripts are deferred but independent of Telegram. The SDK is async
+    # and may arrive later; auth-v2 reads it when the user selects a role.
+    deferred_app = '<script defer src="/static/auth-v2.js?v=6"></script><script defer src="/static/design-v2.js?v=6"></script><script async src="https://telegram.org/js/telegram-web-app.js"></script>'
     html = html.replace("</head>", css_tag + "</head>")
     html = html.replace("</body>", deferred_app + "</body>")
     response = HTMLResponse(html)
