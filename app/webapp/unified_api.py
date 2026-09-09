@@ -59,9 +59,7 @@ async def sales_rows(start: datetime, end: datetime) -> list[dict]:
     result = []
     page = 1
     while page <= 100:
-        payload = await langame_client.product_sales(
-            start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), page=page, page_limit=500
-        )
+        payload = await langame_client.product_sales(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), page=page, page_limit=500)
         batch = rows_of(payload)
         if not batch:
             break
@@ -97,21 +95,10 @@ async def overview(request: Request):
     except LangameAPIError:
         langame_status = "unavailable"
     async with SessionLocal() as session:
-        critical = await session.scalar(
-            select(func.count(InventoryBalance.id)).where(
-                InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock
-            )
-        ) or 0
+        critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock)) or 0
         guests = await session.scalar(select(func.count(Guest.id))) or 0
         open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None))) or 0
-    return {
-        "role": user.role,
-        "timezone": timezone_name(),
-        "revenue": {"products": product_revenue, "gaming": None, "other": None, "total": product_revenue, "product_units": product_units},
-        "attention": ([{"key": "critical_stock", "count": critical, "title": "Критический склад", "target": "warehouse"}] if critical else []),
-        "kpi": {"guests": guests, "new_guests": None, "average_check": None, "open_shifts": open_shifts},
-        "source_status": {"langame": langame_status},
-    }
+    return {"role": user.role, "timezone": timezone_name(), "revenue": {"products": product_revenue, "gaming": None, "other": None, "total": product_revenue, "product_units": product_units}, "attention": ([{"key": "critical_stock", "count": critical, "title": "Критический склад", "target": "warehouse"}] if critical else []), "kpi": {"guests": guests, "new_guests": None, "average_check": None, "open_shifts": open_shifts}, "source_status": {"langame": langame_status}}
 
 
 @router.get("/summary")
@@ -128,14 +115,7 @@ async def work_center(request: Request):
         critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock)) or 0
         pending_writeoffs = await session.scalar(select(func.count(Writeoff.id)).where(Writeoff.status == "pending")) or 0
         open_discrepancies = await session.scalar(select(func.count(Discrepancy.id)).where(Discrepancy.status == "open")) or 0
-    return {
-        "role": user.role,
-        "sections": ["hall", "guests", "finance", "warehouse", "previous_shift", "control", "penalties", "salary", "smm"],
-        "open_shifts": open_shifts,
-        "critical_stock": critical,
-        "pending_writeoffs": pending_writeoffs,
-        "open_discrepancies": open_discrepancies,
-    }
+    return {"role": user.role, "sections": ["hall", "guests", "finance", "warehouse", "previous_shift", "control", "penalties", "salary", "smm"], "open_shifts": open_shifts, "critical_stock": critical, "pending_writeoffs": pending_writeoffs, "open_discrepancies": open_discrepancies}
 
 
 @router.get("/crm")
@@ -408,8 +388,8 @@ async def settings(request: Request):
     user = await user_for(request)
     need(user, Permission.READ_ALL)
     async with SessionLocal() as session:
-        row = (await session.execute(select(OwnerReportSettings).limit(1))).scalar_one_or_none()
-    return {"configured": bool(row), "settings": ({"timezone": row.timezone, "hour": row.hour, "minute": row.minute, "enabled": row.enabled} if row else None), "timezone": timezone_name()}
+        row = (await session.execute(select(OwnerReportSettings).where(OwnerReportSettings.owner_telegram_id == user.telegram_id))).scalar_one_or_none()
+    return {"configured": bool(row), "settings": ({"timezone": row.report_timezone, "hour": row.report_hour, "minute": row.report_minute, "enabled": row.enabled, "include_sales": row.include_sales, "include_shifts": row.include_shifts, "include_inventory": row.include_inventory, "include_discrepancies": row.include_discrepancies, "include_salary": row.include_salary, "include_clients": row.include_clients, "send_excel": row.send_excel} if row else None), "timezone": timezone_name()}
 
 
 @router.get("/smm/campaigns")
