@@ -12,26 +12,17 @@ from app.webapp.langame_live import warehouse_arrivals, warehouse_items, warehou
 # Supported unified roles: "owner", "admin", "smm", "guest".
 ROLE_PATHS = {
     "owner": None,
-    "admin": (
-        "/overview", "/work-center", "/warehouse", "/shifts", "/penalties", "/salary",
-    ),
+    "admin": ("/overview", "/work-center", "/crm", "/warehouse", "/shifts", "/penalties", "/salary", "/admin/", "/settings"),
     "smm": ("/overview", "/crm", "/smm/"),
-    "guest": ("/overview", "/guest/"),
+    "guest": ("/guest/",),
 }
 
 
 async def safe_overview(role: str):
     async with SessionLocal() as session:
         if role == "admin":
-            critical = await session.scalar(
-                select(func.count(InventoryBalance.id)).where(
-                    InventoryBalance.min_stock > 0,
-                    InventoryBalance.quantity <= InventoryBalance.min_stock,
-                )
-            ) or 0
-            open_shifts = await session.scalar(
-                select(func.count(Shift.id)).where(Shift.ended_at.is_(None))
-            ) or 0
+            critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock)) or 0
+            open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None))) or 0
             return {
                 "role": role,
                 "timezone": None,
@@ -97,7 +88,7 @@ class UnifiedRBACMiddleware:
             await response(scope, receive, send)
             return
         scope.setdefault("state", {})["unified_role"] = role
-        if path == "/api/app/overview" and role in {"admin", "smm", "guest"}:
+        if path == "/api/app/overview" and role in {"admin", "smm"}:
             response = JSONResponse(await safe_overview(role), status_code=200)
             await response(scope, receive, send)
             return
