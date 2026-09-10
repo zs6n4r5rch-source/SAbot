@@ -1,8 +1,10 @@
 from pathlib import Path
 
-MODULE = Path(__file__).parents[1] / "app" / "webapp" / "bar_finance.py"
-APP = Path(__file__).parents[1] / "app" / "webapp" / "app.py"
-UI = Path(__file__).parents[1] / "app" / "webapp" / "static" / "index_v2.html"
+ROOT = Path(__file__).parents[1]
+MODULE = ROOT / "app" / "webapp" / "bar_finance.py"
+APP = ROOT / "app" / "webapp" / "app.py"
+UI = ROOT / "app" / "webapp" / "static" / "index.html"
+LIVE_UI = ROOT / "app" / "webapp" / "static" / "app-ux-v10.js"
 
 
 def test_bar_finance_uses_langame_sales_and_arrivals():
@@ -29,9 +31,9 @@ def test_finance_endpoint_exposes_bar_block():
     assert 'from app.webapp.bar_finance import report' in source
 
 
-def test_unified_mini_app_has_finance_entrypoint():
-    source = UI.read_text()
-    assert "api('finance" in source
-    assert "FINANCE" in source
-    assert "Себестоимость" in source
-    assert "Прибыль" in source
+def test_production_finance_screen_has_economics_entrypoint():
+    shell = UI.read_text()
+    live = LIVE_UI.read_text()
+    assert "/api/app/finance" in shell
+    assert "Себестоимость" in live
+    assert "Прибыль" in live
