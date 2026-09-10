@@ -3,20 +3,16 @@ import { chromium } from 'playwright';
 const base = process.env.QA_URL || 'http://127.0.0.1:4173/static/qa-browser.html';
 const browser = await chromium.launch({ headless: true });
 const failures = [];
-const routeLabels = {overview:'Главная',work:'Работа',finance:'Финансы',warehouse:'Склад',crm:'CRM',crmSearch:'Поиск гостей',localLinks:'Telegram / согласие',analytics:'Аналитика',shifts:'Смены',previous:'Предыдущая смена',closeReports:'Закрытия смен',penalties:'Штрафы',salary:'Зарплата',admin:'Контроль администратора',profiles:'Профили доступа',settings:'Настройки',campaigns:'Кампании',guest:'Мой профиль',warehouseCritical:'Критические остатки',warehouseCategories:'Категории склада',warehouseArrivals:'Приходы',warehouseSales:'Продажи товаров',warehouseHistory:'История склада',warehouseWriteoffs:'Списания',warehouseInventories:'Инвентаризации',warehouseDiscrepancies:'Расхождения'};
+const routeLabels={overview:'Главная',work:'Работа',finance:'Финансы',warehouse:'Склад',crm:'CRM',crmSearch:'Поиск гостей',localLinks:'Telegram / согласие',analytics:'Аналитика',shifts:'Смены',previous:'Предыдущая смена',closeReports:'Закрытия смен',penalties:'Штрафы',salary:'Зарплата',admin:'Контроль администратора',profiles:'Профили доступа',settings:'Настройки',campaigns:'Кампании',guest:'Мой профиль',warehouseCritical:'Критические остатки',warehouseCategories:'Категории склада',warehouseArrivals:'Приходы',warehouseSales:'Продажи товаров',warehouseHistory:'История склада',warehouseWriteoffs:'Списания',warehouseInventories:'Инвентаризации',warehouseDiscrepancies:'Расхождения'};
 const allowed={owner:Object.keys(routeLabels),admin:['overview','work','warehouse','shifts','previous','closeReports','penalties','salary','warehouseCritical','warehouseCategories','warehouseArrivals','warehouseSales','warehouseHistory','warehouseWriteoffs','warehouseInventories','warehouseDiscrepancies'],smm:['overview','crm','crmSearch','localLinks','campaigns'],guest:['overview','guest']};
 const expectedNav={owner:['Главная','Работа','Финансы','Ещё'],admin:['Главная','Работа','Склад','Ещё'],smm:['Главная','Работа','CRM','Ещё'],guest:['Главная','Профиль','Ещё']};
 
-for (const role of ['owner','admin','smm','guest']) {
+for(const role of ['owner','admin','smm','guest']){
   const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
   page.on('console',m=>{if(m.type()==='error')failures.push(`${role}: console: ${m.text()}`)});
   page.on('pageerror',e=>failures.push(`${role}: pageerror: ${e.message}`));
-  await page.goto(base,{waitUntil:'networkidle'});
-  await page.waitForFunction(()=>window.__QA_READY__&&window.__SA_START_APP__,null,{timeout:5000});
-  await page.evaluate(r=>window.__QA_SET_ROLE__(r),role);
-  await page.waitForTimeout(80);
-  const roleText=await page.locator('#app .role').innerText();
-  if(roleText!==role.toUpperCase())failures.push(`${role}: role label is ${roleText}`);
+  await page.goto(`${base}?role=${role}`,{waitUntil:'networkidle'});
+  await page.waitForFunction(r=>document.querySelector('#app .role')?.textContent?.trim()===r.toUpperCase(),role,{timeout:5000});
   const nav=await page.locator('#app .bottom button').allTextContents();
   for(const item of expectedNav[role])if(!nav.some(x=>x.trim()===item))failures.push(`${role}: missing nav ${item}`);
   if(role!=='owner'&&nav.some(x=>x.trim()==='Финансы'))failures.push(`${role}: finance leaked into bottom nav`);
