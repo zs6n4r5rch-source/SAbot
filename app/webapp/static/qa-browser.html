@@ -8,5 +8,6 @@ window.fetch=function(input,opts){var url=typeof input==='string'?input:input.ur
 function load(){return new Promise(function(resolve,reject){var s=document.createElement('script');s.src='app-guard.js?v=qa-browser-1';s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}
 window.__QA_READY__=load();
 window.__QA_SET_ROLE__=async function(role){current=role;await window.__QA_READY__;return window.__SA_START_APP__(role)};
+window.__QA_READY__.then(function(){var role=new URLSearchParams(location.search).get('role');if(role)window.__QA_SET_ROLE__(role)});
 })();
 </script></body></html>
