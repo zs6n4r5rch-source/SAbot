@@ -15,8 +15,8 @@ def test_guest_profile_exposes_only_verified_identity_and_consent():
     assert 'GuestTelegram.telegram_user_id == user.telegram_id' in source
     assert '"balance": None' in source
     assert '"bonuses": None' in source
-    assert '"history": None' in source
-    assert 'Only verified local identity/consent are exposed' in source
+    assert '"marketing_consent": tg.marketing_consent' in source
+    assert '"guest": {' in source
 
 
 def test_guest_contour_does_not_grant_finance_or_warehouse_sections():
