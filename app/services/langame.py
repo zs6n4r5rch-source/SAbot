@@ -94,7 +94,7 @@ class LangameClient:
         return await self._get("/products/list")
 
     async def stock(self, club_id: int, page: int = 1, page_limit: int = 100) -> dict:
-        return await self._get("/goods/list", {"club_id": club_id})
+        return await self._get("/goods/list", {"club_id": club_id, "page": page, "page_limit": page_limit})
 
     async def product_sales(self, date_from: str, date_to: str, page: int = 1, page_limit: int = 100, sale_type: str | None = None) -> dict:
         params = {"date_from": date_from, "date_to": date_to, "page": page, "page_limit": page_limit}
