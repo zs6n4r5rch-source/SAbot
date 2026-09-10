@@ -1,0 +1,37 @@
+name: QA
+
+on:
+  push:
+    branches: [qa-harness]
+  workflow_dispatch:
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Start static QA server
+        run: |
+          python -m http.server 4173 --directory app/webapp/static > /tmp/qa-server.log 2>&1 &
+          echo $! > /tmp/qa-server.pid
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright
+        run: npm install --no-save playwright@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run browser smoke checks
+        env:
+          QA_URL: http://127.0.0.1:4173/qa.html
+        run: node qa/playwright.mjs
+      - name: Upload QA screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strike-arena-qa-screenshot
+          path: qa-*.png
+          if-no-files-found: ignore
