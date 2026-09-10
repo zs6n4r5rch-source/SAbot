@@ -25,5 +25,5 @@ def test_live_dashboard_contract_is_present():
     assert "/api/app/live/overview" in src
     assert "/api/app/live/warehouse" in src
     assert "/api/app/live/analytics" in src
-    assert "period=month" in src
+    assert "params.period='month'" in src
     assert "setInterval(function(){if(document.visibilityState==='visible')load(false,true)},20000)" in src
