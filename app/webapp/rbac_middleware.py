@@ -10,6 +10,7 @@ from app.webapp.langame_live import warehouse_arrivals, warehouse_items, warehou
 
 ROLE_PATHS = {
     "owner": None,
+    # Admin is operational only. CRM/admin-control/settings/salary stay owner-only.
     "admin": ("/overview", "/work-center", "/warehouse", "/shifts", "/penalties", "/live/warehouse"),
     "smm": ("/overview", "/crm", "/smm/"),
     "guest": ("/guest/",),
@@ -29,34 +30,27 @@ async def safe_overview(role: str):
 async def _live_data(path: str, role: str, request: Request):
     from datetime import datetime, timedelta, timezone
     now = datetime.now(timezone.utc)
-    if path == "/api/app/warehouse":
-        return await warehouse_items()
+    if path == "/api/app/warehouse": return await warehouse_items()
     if path == "/api/app/warehouse/critical":
-        data = await warehouse_items()
-        return {"source":"langame","items":[x for x in data["items"] if x.get("critical")]}
+        data = await warehouse_items(); return {"source":"langame","items":[x for x in data["items"] if x.get("critical")]}
     if path == "/api/app/warehouse/arrivals":
-        days=min(max(int(request.query_params.get("days","30")),1),365)
-        return await warehouse_arrivals(days,now,now-timedelta(days=days))
+        days=min(max(int(request.query_params.get("days","30")),1),365); return await warehouse_arrivals(days,now,now-timedelta(days=days))
     if path == "/api/app/warehouse/sales":
-        days=min(max(int(request.query_params.get("days","30")),1),365)
-        return await warehouse_sales(days,now,now-timedelta(days=days))
+        days=min(max(int(request.query_params.get("days","30")),1),365); return await warehouse_sales(days,now,now-timedelta(days=days))
     return None
 
 
 class UnifiedRBACMiddleware:
     def __init__(self, app): self.app=app
-
     async def __call__(self, scope, receive, send):
         path=scope.get("path","")
         if scope.get("type")!="http" or not path.startswith("/api/app/"):
             await self.app(scope,receive,send); return
-        if path=="/api/app/auth":
-            await self.app(scope,receive,send); return
+        if path=="/api/app/auth": await self.app(scope,receive,send); return
         request=Request(scope,receive=receive)
         try:
             user,_=await current_user(request); role=str(getattr(user,"role","")).lower()
-        except Exception:
-            role=""
+        except Exception: role=""
         if role not in ROLE_PATHS:
             response=JSONResponse({"detail":"Unified API role is not configured"},status_code=403); await response(scope,receive,send); return
         if path=="/api/app/salary" and role!="owner":
