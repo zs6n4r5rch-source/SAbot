@@ -332,7 +332,8 @@ async def penalties(request: Request):
 @router.get("/salary")
 async def salary(request: Request, limit: int = 100):
     user = await user_for(request)
-    need(user, Permission.READ_ALL if user.role == "owner" else Permission.SHIFT)
+    if user.role != "owner":
+        raise HTTPException(403, "Salary access is restricted to owner")
     async with SessionLocal() as session:
         periods = (await session.execute(select(SalaryPeriod, Employee).join(Employee, Employee.id == SalaryPeriod.employee_id).order_by(desc(SalaryPeriod.date_to)).limit(min(max(limit, 1), 300)))).all()
         result = []
@@ -425,7 +426,7 @@ async def guest_me(request: Request):
     need(user, Permission.OWN_PROFILE)
     async with SessionLocal() as session:
         link = (await session.execute(select(GuestTelegram, Guest).join(Guest, Guest.id == GuestTelegram.guest_id).where(GuestTelegram.telegram_user_id == user.telegram_id))).first()
-    if not link:
-        raise HTTPException(404, "Guest profile is not linked")
-    tg, guest = link
-    return {"id": guest.id, "name": guest.fio, "phone": guest.phone, "marketing_consent": tg.marketing_consent, "marketing_consent_at": tg.marketing_consent_at.isoformat() if tg.marketing_consent_at else None, "balance": None, "bonuses": None, "history": None, "source_note": "Only verified local identity/consent are exposed; unverified balance/bonus/history fields remain unavailable."}
+        if not link:
+            raise HTTPException(404, "Guest profile is not linked")
+        tg, guest = link
+        return {"guest": {"id": guest.id, "name": guest.fio, "phone": guest.phone, "marketing_consent": tg.marketing_consent, "linked_at": tg.linked_at.isoformat() if tg.linked_at else None}, "balance": None, "bonuses": None, "marketing_consent": tg.marketing_consent}
