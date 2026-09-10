@@ -9,7 +9,7 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgresql://test:test@localhost:5432/test
+      DATABASE_URL: ""
       LANGAME_API_KEY: test
       TELEGRAM_BOT_TOKEN: test
       LANGAME_READ_ONLY: "true"
