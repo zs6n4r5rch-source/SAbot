@@ -7,11 +7,13 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_mini_app_has_static_fallback_and_deterministic_start_contract():
     index = (ROOT / "app/webapp/static/index.html").read_text(encoding="utf-8")
     guard = (ROOT / "app/webapp/static/app-guard.js").read_text(encoding="utf-8")
+    role_ui = (ROOT / "app/webapp/static/role-ui-v2.js").read_text(encoding="utf-8")
     assert "boot-fallback" in index
     assert "window.__SA_START_APP__" in index
     assert "X-Telegram-Init-Data" in guard
     assert "cache:'no-store'" in guard
-    assert "signal('ready')" in guard
+    assert "window.__SA_QA_CAN__" in guard
+    assert "sa:app-state" in role_ui
 
 
 def test_auth_gate_does_not_disappear_before_application_start():
