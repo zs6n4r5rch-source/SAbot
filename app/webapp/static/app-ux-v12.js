@@ -27,5 +27,6 @@ function install(){
   }
 }
 window.addEventListener('sa:app-state',e=>{if(e.detail?.state==='ready')setTimeout(install,0);});
+setTimeout(install,0);
 window.__SA_UX_V12_READY__=true;
 })();
