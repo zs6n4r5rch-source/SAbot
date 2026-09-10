@@ -29,7 +29,9 @@ class Permission(StrEnum):
 ROLE_PERMISSIONS = {
     "owner": frozenset(Permission),
     "admin": frozenset({Permission.SHIFT, Permission.HALL, Permission.GUESTS, Permission.SALES, Permission.WAREHOUSE, Permission.TASKS, Permission.OWN_PENALTIES, Permission.EXPORT}),
-    "smm": frozenset({Permission.AUDIENCE, Permission.SEGMENTS, Permission.CAMPAIGNS, Permission.ACTIVITIES, Permission.RESULTS, Permission.EXPORT}),
+    # SMM needs read-only guest segmentation/search/consent access, but no finance,
+    # shift, warehouse, salary or management-control permissions.
+    "smm": frozenset({Permission.AUDIENCE, Permission.SEGMENTS, Permission.CAMPAIGNS, Permission.ACTIVITIES, Permission.RESULTS, Permission.GUESTS, Permission.EXPORT}),
     "guest": frozenset({Permission.OWN_PROFILE, Permission.OWN_BALANCE, Permission.OWN_HISTORY}),
 }
 
