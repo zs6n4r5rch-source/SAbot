@@ -3,6 +3,10 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import select
+
+from app.db.session import SessionLocal
+from app.models import InventoryBalance, Product
 from app.services.langame import LangameAPIError, langame_client
 
 
@@ -81,6 +85,9 @@ async def _paged_stock(club_id: int) -> list[dict]:
 async def warehouse_items() -> dict:
     clubs_payload = await langame_client.clubs()
     clubs = rows_of(clubs_payload)
+    async with SessionLocal() as session:
+        local_rows = (await session.execute(select(InventoryBalance, Product).join(Product, Product.id == InventoryBalance.product_id))).all()
+    thresholds = {(int(b.club_id), int(p.langame_product_id)): float(b.min_stock or 0) for b, p in local_rows}
     items: list[dict] = []
     for club in clubs:
         club_id = first(club, "id", "club_id", "clubId")
@@ -90,15 +97,17 @@ async def warehouse_items() -> dict:
             key = product_key(row)
             if key is None:
                 continue
+            qty = quantity(row)
+            threshold = thresholds.get((int(club_id), int(key)))
             items.append({
                 "id": key,
                 "club_id": club_id,
                 "club": first(club, "name", "title", default=f"Клуб #{club_id}"),
                 "product": product_name(row),
                 "category": first(row, "category_name", "category", default="—"),
-                "quantity": quantity(row),
-                "min_stock": 0,
-                "critical": False,
+                "quantity": qty,
+                "min_stock": threshold,
+                "critical": bool(threshold is not None and threshold > 0 and qty <= threshold),
                 "source": "langame",
             })
     return {"source": "langame", "items": items}
