@@ -10,11 +10,13 @@ STATIC = ROOT / "app" / "webapp" / "static"
 def test_mini_app_boot_has_static_fallback_and_explicit_start_contract():
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     guard = (STATIC / "app-guard.js").read_text(encoding="utf-8")
+    role_ui = (STATIC / "role-ui-v2.js").read_text(encoding="utf-8")
     assert 'id="app"' in html
     assert "Запуск приложения" in html
     assert "window.__SA_START_APP__" in html
-    assert "signal('ready')" in guard
-    assert "state={role:'guest'" in guard
+    assert "window.__SA_QA_CAN__" in guard
+    assert "sa:app-state" in role_ui
+    assert "state==='ready'" in role_ui
 
 
 def test_mini_app_javascript_syntax():
