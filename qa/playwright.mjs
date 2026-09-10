@@ -7,10 +7,29 @@ const failures = [];
 
 page.on('console', msg => { if (msg.type() === 'error') failures.push(`console: ${msg.text()}`); });
 page.on('pageerror', err => failures.push(`pageerror: ${err.message}`));
-await page.route('**/api/smm/marketing-analytics**', async route => {
-  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ role: 'smm', guests: 42, campaigns: 4, telegram_links: 12, marketing_consent: 9 }) });
+await page.route('**/api/app/**', async route => {
+  const url = new URL(route.request().url());
+  let body = {
+    revenue: { total: 12345, products: 2345 },
+    payments: { cash: 5000, card: 6000, mobile: 1345 },
+    kpi: { guests: 42, open_shifts: 1 },
+    open_shifts: 1,
+    critical_stock: 3,
+    pending_writeoffs: 1,
+    open_discrepancies: 0,
+    guest_count: 42,
+    groups_count: 4,
+    linked_guests: 12,
+    campaigns_count: 4,
+    name: 'Тестовый гость',
+    marketing_consent: true,
+    balance: 1000,
+    bonuses: 50,
+    items: [],
+  };
+  if (url.pathname.endsWith('/analytics')) body = { ...body, periods: {}, admins: [], sales: {}, inventory: {}, salary: {}, clients: {} };
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 });
-
 await page.goto(base, { waitUntil: 'networkidle' });
 await page.waitForTimeout(500);
 
@@ -39,8 +58,8 @@ const expectedNav = {
   guest: ['Главная','Профиль','Ещё'],
 };
 
-const summary = await page.locator('#summary').innerText();
-console.log(`QA bootstrap summary: ${summary}`);
+const summary = await page.locator('#app').innerText();
+console.log(`QA bootstrap summary: ${summary.slice(0, 80)}`);
 
 for (const role of ['owner', 'admin', 'smm', 'guest']) {
   await page.evaluate(r => window.__SA_START_APP__(r), role);
@@ -55,7 +74,7 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
   const homeText = await page.locator('#app').innerText();
   if (role === 'owner' && !homeText.includes('12 345') && !homeText.includes('12 345')) failures.push('owner: revenue fixture not rendered');
   if (role === 'admin' && !homeText.includes('3')) failures.push('admin: warehouse KPI fixture not rendered');
-  if (role === 'smm' && (!homeText.includes('42') || !homeText.includes('12') || !homeText.includes('9'))) failures.push('smm: marketing KPI fixture not rendered');
+  if (role === 'smm' && (!homeText.includes('42') || !homeText.includes('12') || !homeText.includes('4'))) failures.push('smm: marketing KPI fixture not rendered');
   if (role === 'guest' && !homeText.includes('Тестовый гость')) failures.push('guest: profile fixture not rendered');
 
   const more = page.locator('#app [data-more], #app [data-smm-more]').first();
@@ -101,6 +120,7 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
 if (failures.length) {
   console.error(failures.join('\n'));
   await page.screenshot({ path: 'qa-failure.png', fullPage: true });
+  await browser.close();
   process.exit(1);
 }
 
