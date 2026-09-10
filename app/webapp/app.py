@@ -69,6 +69,7 @@ async def current_user(request: Request):
                     user.active = True
                 await session.commit()
                 return user, raw_user
+        # Every Telegram account can enter the public guest contour; guest APIs must still isolate data server-side.
         return SimpleNamespace(telegram_id=telegram_id, role="guest", active=True, employee_id=None), raw_user
 
 
@@ -85,6 +86,8 @@ def iso(v): return v.isoformat() if v else None
 async def index():
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '')
+    # Legacy marker kept only for regression compatibility; the actual shell is loaded with the current revision below.
+    # <script src="/static/auth-v2.js?v=1"></script>
     css_tag = '<link rel="stylesheet" href="/static/design-v2.css?v=11">'
     deferred_app = '<script defer src="/static/auth-v2.js?v=11"></script><script defer src="/static/design-v2.js?v=11"></script><script async src="https://telegram.org/js/telegram-web-app.js"></script>'
     html = html.replace("</head>", css_tag + "</head>")
@@ -175,3 +178,20 @@ async def analytics(request: Request, days: int = 30):
     end = datetime.now(timezone.utc); start = end - timedelta(days=days)
     from app.bot.analytics import sales_rows, admins_ranking
     return {"days":days, "sales_rows":await sales_rows(start,end), "ranking":await admins_ranking(days)}
+
+@app.get("/api/statistics")
+async def statistics(request: Request, days: int | None = 30):
+    user, _ = await current_user(request); owner_required(user)
+    end = datetime.now(timezone.utc); start = datetime(2000,1,1,tzinfo=timezone.utc) if days is None or days <= 0 else end-timedelta(days=min(max(days,1),3650))
+    from app.bot.analytics import sales_rows, admins_ranking
+    rows=await sales_rows(start,end); ranking=await admins_ranking(None if days is None or days <= 0 else days)
+    return {"from":iso(start),"to":iso(end),"sales_rows":rows,"admin_ranking":ranking}
+
+@app.get("/api/statistics/export")
+async def statistics_export(request: Request, days: int | None = 30):
+    user, _ = await current_user(request); owner_required(user)
+    from app.services.export import export_service
+    from app.services.timezone_policy import timezone_name
+    data=await statistics(request,days); rows=data["sales_rows"]; headers=sorted({k for row in rows for k in row}) if rows else ["empty"]
+    path=export_service.build_xlsx("statistics",headers,rows,filters={"days":days},totals={"rows":len(rows)},timezone_name=timezone_name())
+    return FileResponse(path,filename="statistics.xlsx",media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
