@@ -76,7 +76,8 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
   if (role === 'guest' && !drawerText.includes('Мой профиль')) failures.push('guest: profile missing');
 
   const close = page.locator('#drawer [data-drawer-close]').first();
-  if (await close.count()) await close.click(); else await page.locator('#drawerBackdrop').click();
+  if (await close.count()) await close.click();
+  else if (await page.locator('#drawer').evaluate(el => el.classList.contains('open'))) await page.locator('#drawerBackdrop').evaluate(el => el.click());
   if (await page.locator('#drawer').evaluate(el => el.classList.contains('open'))) failures.push(`${role}: drawer did not close`);
 
   for (const route of allowed[role]) {
@@ -85,7 +86,11 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
     await currentMore.click();
     const label = routeLabels[route];
     const button = page.locator(`#drawer [data-drawer-page], #drawer [data-smm-page]`).filter({ hasText: label }).first();
-    if (!(await button.count())) { failures.push(`${role}: route ${route} missing from drawer`); await page.locator('#drawerBackdrop').click(); continue; }
+    if (!(await button.count())) {
+      failures.push(`${role}: route ${route} missing from drawer`);
+      if (await page.locator('#drawer').evaluate(el => el.classList.contains('open'))) await page.locator('#drawerBackdrop').evaluate(el => el.click());
+      continue;
+    }
     await button.evaluate(el => el.click());
     await page.waitForTimeout(40);
     const heading = await page.locator('#app .section-head h1').innerText().catch(() => '');
