@@ -31,3 +31,10 @@ def local_period_bounds(days: int, now: datetime | None = None) -> tuple[datetim
     local_end = (now or now_utc()).astimezone(club_tz())
     local_start = local_end - timedelta(days=days)
     return local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
+
+
+def local_month_bounds(now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Return the current calendar month in the configured club timezone."""
+    local_end = (now or now_utc()).astimezone(club_tz())
+    local_start = local_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
