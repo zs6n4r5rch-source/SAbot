@@ -16,12 +16,6 @@ await page.waitForTimeout(500);
 await page.addScriptTag({ url: '/static/role-ui-v2.js?v=qa' });
 await page.waitForTimeout(100);
 
-const roleLabels = {
-  owner: 'Владелец',
-  admin: 'Администратор',
-  smm: 'SMM-специалист',
-  guest: 'Гость',
-};
 const routeLabels = {
   overview: 'Главная', work: 'Работа', finance: 'Финансы', warehouse: 'Склад',
   crm: 'CRM', crmSearch: 'Поиск гостей', localLinks: 'Telegram / consent', analytics: 'Аналитика',
@@ -51,10 +45,10 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
   const nav = await page.locator('#app .bottom button').allTextContents();
   const expectedNav = role === 'owner' ? ['Главная','Работа','Финансы','Ещё']
     : role === 'admin' ? ['Главная','Работа','Склад','Ещё']
-    : role === 'smm' ? ['Главная','Работа','Финансы','Ещё']
+    : role === 'smm' ? ['Главная','Работа','Ещё']
     : ['Главная','Профиль','Ещё'];
   for (const item of expectedNav) if (!nav.some(x => x.trim() === item)) failures.push(`${role}: missing nav ${item}`);
-  if (role !== 'owner' && role !== 'smm' && nav.some(x => x.trim() === 'Финансы')) failures.push(`${role}: finance leaked into bottom nav`);
+  if (role !== 'owner' && nav.some(x => x.trim() === 'Финансы')) failures.push(`${role}: finance leaked into bottom nav`);
 
   const more = page.locator('#app [data-more], #app [data-smm-more]').first();
   if (!(await more.count())) { failures.push(`${role}: missing «Ещё»`); continue; }
