@@ -36,6 +36,7 @@ from app.webapp.guest_invites_api import router as guest_invites_router
 from app.webapp.actions_api import router as actions_api_router
 from app.webapp.auth_api import router as auth_api_router
 from app.webapp.live_metrics_api import router as live_metrics_router
+from app.webapp.penalties_api import router as penalties_api_router
 from app.webapp.rbac_middleware import UnifiedRBACMiddleware
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
@@ -91,6 +92,7 @@ async def main():
     web_app.include_router(final_contract_router)
     web_app.include_router(guest_invites_router)
     web_app.include_router(live_metrics_router)
+    web_app.include_router(penalties_api_router)
     web_app.include_router(unified_api_router)
     web_app.include_router(actions_api_router)
     web_app.include_router(auth_api_router)
