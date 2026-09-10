@@ -10,7 +10,8 @@ from app.webapp.langame_live import warehouse_arrivals, warehouse_items, warehou
 
 ROLE_PATHS = {
     "owner": None,
-    "admin": ("/overview", "/work-center", "/crm", "/warehouse", "/shifts", "/penalties", "/admin/", "/settings", "/live/"),
+    # Admin is operational only. CRM/admin-control/settings/salary stay owner-only.
+    "admin": ("/overview", "/work-center", "/warehouse", "/shifts", "/penalties", "/live/"),
     "smm": ("/overview", "/crm", "/smm/", "/live/"),
     "guest": ("/guest/",),
 }
