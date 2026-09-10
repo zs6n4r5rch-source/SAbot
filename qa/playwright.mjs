@@ -2,13 +2,7 @@ import { chromium } from 'playwright';
 
 const base = process.env.QA_URL || 'http://127.0.0.1:4173/static/qa.html';
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 const failures = [];
-
-page.on('console', msg => { if (msg.type() === 'error') failures.push(`console: ${msg.text()}`); });
-page.on('pageerror', err => failures.push(`pageerror: ${err.message}`));
-await page.goto(base, { waitUntil: 'networkidle' });
-await page.waitForTimeout(600);
 
 const routeLabels = {
   overview: 'Главная', work: 'Работа', finance: 'Финансы', warehouse: 'Склад',
@@ -20,32 +14,27 @@ const routeLabels = {
   warehouseHistory: 'История склада', warehouseWriteoffs: 'Списания', warehouseInventories: 'Инвентаризации',
   warehouseDiscrepancies: 'Расхождения',
 };
-
 const allowed = {
   owner: Object.keys(routeLabels),
   admin: ['overview','work','warehouse','shifts','previous','closeReports','penalties','salary','warehouseCritical','warehouseCategories','warehouseArrivals','warehouseSales','warehouseHistory','warehouseWriteoffs','warehouseInventories','warehouseDiscrepancies'],
-  smm: ['overview','crm','crmSearch','localLinks','campaigns'],
-  guest: ['overview','guest'],
+  smm: ['overview','crm','crmSearch','localLinks','campaigns'], guest: ['overview','guest'],
 };
-
 const expectedNav = {
-  owner: ['Главная','Работа','Финансы','Ещё'],
-  admin: ['Главная','Работа','Склад','Ещё'],
-  smm: ['Главная','Работа','CRM','Ещё'],
-  guest: ['Главная','Профиль','Ещё'],
+  owner: ['Главная','Работа','Финансы','Ещё'], admin: ['Главная','Работа','Склад','Ещё'],
+  smm: ['Главная','Работа','CRM','Ещё'], guest: ['Главная','Профиль','Ещё'],
 };
-
-console.log(`QA bootstrap summary: ${await page.locator('#summary').innerText()}`);
 
 for (const role of ['owner', 'admin', 'smm', 'guest']) {
-  const roleButton = page.locator(`#roles [data-role="${role}"]`).first();
-  if (!(await roleButton.count())) { failures.push(`${role}: missing QA role control`); continue; }
-  await roleButton.click();
-  await page.waitForTimeout(80);
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+  page.on('console', msg => { if (msg.type() === 'error') failures.push(`${role}: console: ${msg.text()}`); });
+  page.on('pageerror', err => failures.push(`${role}: pageerror: ${err.message}`));
+  await page.goto(base, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => window.__SA_START_APP__ && document.querySelector('#summary')?.textContent !== 'не запускался', null, { timeout: 5000 });
+  await page.evaluate(r => window.__SA_START_APP__(r), role);
+  await page.waitForTimeout(100);
 
   const roleText = await page.locator('#app .role').innerText();
   if (roleText !== role.toUpperCase()) failures.push(`${role}: role label is ${roleText}`);
-
   const nav = await page.locator('#app .bottom button').allTextContents();
   for (const item of expectedNav[role]) if (!nav.some(x => x.trim() === item)) failures.push(`${role}: missing nav ${item}`);
   if (role !== 'owner' && nav.some(x => x.trim() === 'Финансы')) failures.push(`${role}: finance leaked into bottom nav`);
@@ -57,9 +46,8 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
   if (role === 'guest' && !homeText.includes('Тестовый гость')) failures.push('guest: profile fixture not rendered');
 
   const more = page.locator('#app [data-more]').first();
-  if (!(await more.count())) { failures.push(`${role}: missing «Ещё»`); continue; }
-  await more.click();
-  await page.waitForTimeout(50);
+  if (!(await more.count())) { failures.push(`${role}: missing «Ещё»`); await page.close(); continue; }
+  await more.click(); await page.waitForTimeout(50);
   if (!(await page.locator('#drawer').evaluate(el => el.classList.contains('open')))) failures.push(`${role}: drawer did not open`);
   const drawerText = await page.locator('#drawer').innerText();
   if (role === 'owner' && !drawerText.includes('Контроль администратора')) failures.push('owner: admin control missing');
@@ -89,20 +77,14 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
       if (await page.locator('#drawer').evaluate(el => el.classList.contains('open'))) await page.locator('#drawerBackdrop').evaluate(el => el.click());
       continue;
     }
-    await button.evaluate(el => el.click());
-    await page.waitForTimeout(40);
+    await button.evaluate(el => el.click()); await page.waitForTimeout(40);
     const heading = await page.locator('#app .section-head h1').innerText().catch(() => '');
     if (!heading.includes(label)) failures.push(`${role}: route ${route} rendered heading ${heading}`);
   }
+  await page.screenshot({ path: `qa-${role}.png`, fullPage: true });
+  await page.close();
 }
 
-if (failures.length) {
-  console.error(failures.join('\n'));
-  await page.screenshot({ path: 'qa-failure.png', fullPage: true });
-  await browser.close();
-  process.exit(1);
-}
-
-await page.screenshot({ path: 'qa-pass.png', fullPage: true });
-await browser.close();
+if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log('Browser smoke + product acceptance checks passed.');
+await browser.close();
