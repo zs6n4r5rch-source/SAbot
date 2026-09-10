@@ -16,6 +16,8 @@ def test_mini_app_boot_has_static_fallback_and_explicit_start_contract():
     assert "window.__SA_START_APP__" in html
     assert "window.__SA_QA_CAN__" in guard
     assert "sa:app-state" in role_ui
+    assert "signal('loading')" in role_ui
+    assert "signal('ready')" in role_ui
     assert "state==='ready'" in role_ui
 
 
