@@ -3,6 +3,12 @@ name: QA
 on:
   push:
     branches: [qa-harness]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/webapp/static/**'
+      - 'qa/**'
+      - '.github/workflows/qa.yml'
   workflow_dispatch:
 
 jobs:
