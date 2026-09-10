@@ -26,11 +26,19 @@ const routeLabels = {
   warehouseHistory: 'История склада', warehouseWriteoffs: 'Списания', warehouseInventories: 'Инвентаризации',
   warehouseDiscrepancies: 'Расхождения',
 };
+
 const allowed = {
   owner: Object.keys(routeLabels),
-  admin: ['overview','work','warehouse','crm','crmSearch','localLinks','shifts','previous','closeReports','penalties','salary','admin','profiles','settings','warehouseCritical','warehouseCategories','warehouseArrivals','warehouseSales','warehouseHistory','warehouseWriteoffs','warehouseInventories','warehouseDiscrepancies'],
+  admin: ['overview','work','warehouse','shifts','previous','closeReports','penalties','salary','warehouseCritical','warehouseCategories','warehouseArrivals','warehouseSales','warehouseHistory','warehouseWriteoffs','warehouseInventories','warehouseDiscrepancies'],
   smm: ['overview','crm','crmSearch','localLinks','campaigns'],
   guest: ['overview','guest'],
+};
+
+const expectedNav = {
+  owner: ['Главная','Работа','Финансы','Ещё'],
+  admin: ['Главная','Работа','Склад','Ещё'],
+  smm: ['Главная','Работа','CRM','Ещё'],
+  guest: ['Главная','Профиль','Ещё'],
 };
 
 const summary = await page.locator('#summary').innerText();
@@ -43,11 +51,7 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
   if (roleText !== role.toUpperCase()) failures.push(`${role}: role label is ${roleText}`);
 
   const nav = await page.locator('#app .bottom button').allTextContents();
-  const expectedNav = role === 'owner' ? ['Главная','Работа','Финансы','Ещё']
-    : role === 'admin' ? ['Главная','Работа','Склад','Ещё']
-    : role === 'smm' ? ['Главная','Работа','Ещё']
-    : ['Главная','Профиль','Ещё'];
-  for (const item of expectedNav) if (!nav.some(x => x.trim() === item)) failures.push(`${role}: missing nav ${item}`);
+  for (const item of expectedNav[role]) if (!nav.some(x => x.trim() === item)) failures.push(`${role}: missing nav ${item}`);
   if (role !== 'owner' && nav.some(x => x.trim() === 'Финансы')) failures.push(`${role}: finance leaked into bottom nav`);
 
   const homeText = await page.locator('#app').innerText();
@@ -65,6 +69,8 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
   if (role === 'owner' && !drawerText.includes('Контроль администратора')) failures.push('owner: admin control missing');
   if (role === 'owner' && !drawerText.includes('Настройки')) failures.push('owner: settings missing');
   if (role === 'admin' && drawerText.includes('Финансы')) failures.push('admin: finance leaked into drawer');
+  if (role === 'admin' && drawerText.includes('CRM')) failures.push('admin: CRM leaked into drawer');
+  if (role === 'admin' && drawerText.includes('Контроль администратора')) failures.push('admin: owner control leaked into drawer');
   if (role === 'admin' && !drawerText.includes('Склад')) failures.push('admin: warehouse missing');
   if (role === 'admin' && !drawerText.includes('Зарплата')) failures.push('admin: salary missing');
   if (role === 'smm' && !drawerText.includes('CRM')) failures.push('smm: CRM missing');
