@@ -18,13 +18,12 @@ def test_production_shell_is_the_tested_shell():
     assert 'id="drawer"' in html
     assert "app-guard.js" in html
     assert "auth-v2.js" in html
-    assert "/api/app/finance" in html
-    assert "/api/app/warehouse" in html
 
 
-def test_live_refresh_layer_is_present():
-    source = (ROOT / "app/webapp/static/app-ux-v10.js").read_text(encoding="utf-8")
-    assert "/api/app/warehouse" in source
-    assert "/api/app/overview" in source
-    assert "/api/app/finance" in source
-    assert "setInterval(fn,20000)" in source
+def test_live_dashboard_contract_is_present():
+    src = (ROOT / "app/webapp/static/app-guard.js").read_text(encoding="utf-8")
+    assert "/api/app/live/overview" in src
+    assert "/api/app/live/warehouse" in src
+    assert "/api/app/live/analytics" in src
+    assert "period=month" in src
+    assert "setInterval(function(){if(document.visibilityState==='visible')load(false,true)},20000)" in src
