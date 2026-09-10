@@ -1,0 +1,67 @@
+:root{
+  --bg:#07080b;
+  --surface:#101318;
+  --surface-2:#15191f;
+  --surface-3:#1b2027;
+  --line:#252b33;
+  --text:#f5f7f8;
+  --muted:#8f979f;
+  --accent:#b7ff32;
+  --accent-soft:rgba(183,255,50,.10);
+  --danger:#ff6670;
+  --warning:#ffd35a;
+  --good:#8de45b;
+  --radius:14px;
+}
+html,body{background:var(--bg);color:var(--text)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.005em}
+button{border:1px solid var(--line);background:var(--surface-2);border-radius:var(--radius);min-height:46px;padding:11px 14px;font-weight:750;transition:background .15s ease,border-color .15s ease,transform .08s ease}
+button:active{transform:scale(.985)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#080a0b}
+button.ghost{background:transparent}
+button:hover{border-color:#3a424c}
+.app{max-width:920px}
+.app-header{padding:14px 2px 18px}
+.mark{width:24px;height:24px;border-radius:4px;box-shadow:0 0 22px rgba(183,255,50,.16)}
+.brand-name{font-size:20px;letter-spacing:-.02em}
+.section-head{margin:10px 0 20px}
+.section-head h1{font-size:32px;line-height:1.06;letter-spacing:-.04em}
+.section-head p{color:var(--muted);font-size:14px;line-height:1.45}
+.grid{gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px;min-height:96px}
+.stat.accent{border-color:rgba(183,255,50,.32);background:linear-gradient(145deg,var(--surface),rgba(183,255,50,.035))}
+.stat .label{font-size:11px;letter-spacing:.06em;color:var(--muted)}
+.stat .value{font-size:30px;line-height:1.05;margin-top:8px;letter-spacing:-.035em}
+.card{background:var(--surface);border:0;border-top:1px solid var(--line);border-radius:0;padding:18px 0;margin:12px 0}
+.card-title{font-size:17px;margin-bottom:12px}
+.list{display:grid;gap:0}
+.row{padding:13px 0;border-bottom:1px solid var(--line);min-height:52px}
+.row-main b{font-size:14px}
+.row-main span{font-size:12px;color:var(--muted)}
+.row-value{font-size:14px}
+.actions-grid{gap:8px}
+.actions-grid button{min-height:44px;text-align:left}
+.notice,.error{background:var(--surface);border:0;border-left:2px solid var(--accent);border-radius:0;padding:14px 16px;margin:14px 0}
+.error{border-left-color:var(--danger)}
+.toolbar input{padding:11px 13px;border-radius:12px;background:var(--surface-2)}
+.periods{gap:6px;margin-bottom:12px}
+.periods button{min-width:58px;min-height:40px;padding:8px 10px}
+.bottom{left:10px;right:10px;bottom:8px;background:rgba(13,15,19,.96);border:1px solid #20262d;border-radius:18px;padding:5px;gap:3px;box-shadow:0 10px 30px rgba(0,0,0,.45);backdrop-filter:blur(18px)}
+.bottom button{min-height:54px;border-radius:12px;font-size:11px;padding:5px 2px}
+.bottom button.active{background:var(--accent-soft);color:var(--accent)}
+.bottom .ico{font-size:18px;line-height:18px;margin-bottom:3px}
+.drawer-backdrop{background:rgba(0,0,0,.72)}
+.drawer{background:#0d1014;border:0;border-top:1px solid var(--line);border-radius:20px 20px 0 0;padding:12px 16px calc(82px + env(safe-area-inset-bottom));max-height:82vh}
+.drawer:before{content:"";display:block;width:34px;height:4px;border-radius:99px;background:#3a4149;margin:0 auto 16px}
+.drawer h2{font-size:20px;margin:2px 0 14px}
+.drawer-group{margin-bottom:14px}
+.drawer-group-title{font-size:10px;letter-spacing:.08em}
+.drawer button{border:0;border-bottom:1px solid var(--line);background:transparent;border-radius:0;min-height:44px;margin:0;padding:11px 4px}
+.drawer-close{background:var(--surface-2)!important;border:1px solid var(--line)!important;border-radius:10px!important;text-align:center!important;margin-bottom:12px!important}
+.detail-grid{gap:8px}
+.detail{background:var(--surface-2);border:0;border-radius:10px;padding:12px}
+.table th,.table td{padding:9px;border-bottom:1px solid var(--line)}
+.pill{padding:6px 9px}
+.boot-card{border:0;border-top:1px solid var(--line);border-radius:0;background:var(--surface);padding:28px 20px}
+@media(max-width:699px){.section-head h1{font-size:30px}.stat .value{font-size:27px}}
+@media(min-width:700px){.bottom{width:min(680px,calc(100% - 24px))}}
