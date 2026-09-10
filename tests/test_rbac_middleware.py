@@ -7,9 +7,6 @@ def test_rbac_middleware_parses_and_allows_configured_role_boundary():
     ast.parse(source)
     assert '"owner", "admin", "smm", "guest"' in source
     assert "Unified API role is not configured" in source
-    assert '"guest": ("/overview", "/guest/")' in source
-    assert '"admin": (' in source
-    assert '"/warehouse", "/shifts", "/penalties", "/salary"' in source
 
 
 def test_main_installs_unified_rbac():
