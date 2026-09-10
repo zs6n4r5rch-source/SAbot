@@ -1,0 +1,12 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Strike Arena browser QA</title><link rel="stylesheet" href="strike-design.css" data-sa-design></head><body><div id="app"><div class="loading">QA…</div></div><div id="drawerBackdrop" class="drawer-backdrop"></div><aside id="drawer" class="drawer"><h2>Все разделы</h2><div id="drawerBody"></div></aside><script>
+window.Telegram={WebApp:{initData:'qa',ready:function(){},expand:function(){}}};
+(function(){
+var current='guest';
+var fixtures={owner:{revenue:{total:12345,products:3456},payments:{cash:5000,card:6000,mobile:1345},kpi:{guests:42,open_shifts:2}},admin:{revenue:{total:12345},open_shifts:2,critical_stock:3,pending_writeoffs:1,open_discrepancies:1},smm:{guest_count:42,groups_count:4,linked_guests:12,campaigns_count:4},guest:{name:'Тестовый гость',phone:'+7 900 000-00-00',marketing_consent:true,balance:1000,bonuses:50}};
+var realFetch=window.fetch;
+window.fetch=function(input,opts){var url=typeof input==='string'?input:input.url;if(url.indexOf('/api/app/')>=0){var path=new URL(url,location.origin).pathname;var d=fixtures[current]||{};if(path==='/api/app/analytics')d={kpi:{product_revenue:12345,shifts:8,hours:64,product_units:42,approved_writeoffs:1,discrepancies:0,cash_difference:0,salary_total:9000}};return Promise.resolve(new Response(JSON.stringify(d),{status:200,headers:{'Content-Type':'application/json'}}));}return realFetch.apply(this,arguments)};
+function load(){return new Promise(function(resolve,reject){var s=document.createElement('script');s.src='app-guard.js?v=qa-browser-1';s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}
+window.__QA_READY__=load();
+window.__QA_SET_ROLE__=async function(role){current=role;await window.__QA_READY__;return window.__SA_START_APP__(role)};
+})();
+</script></body></html>
