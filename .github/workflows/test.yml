@@ -8,6 +8,12 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/test
+      LANGAME_API_KEY: test
+      TELEGRAM_BOT_TOKEN: test
+      LANGAME_READ_ONLY: "true"
+      UNIT_TESTS_ONLY: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

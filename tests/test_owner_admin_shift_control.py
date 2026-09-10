@@ -1,11 +1,13 @@
 from pathlib import Path
 
 
-def test_admin_shift_control_is_installed():
+def test_admin_shift_control_is_installed_in_active_contract():
+    root = Path("app/webapp")
     main = Path("app/main.py").read_text(encoding="utf-8")
-    module = Path("app/webapp/admin_shift_control.py").read_text(encoding="utf-8")
-    assert "install_admin_shift_control(web_app)" in main
-    assert '"/api/admins/{employee_id}/shifts"' in module
-    assert "reports_submitted" in module
-    assert "Сейчас на смене" in module
-    assert "adminDetail" in module
+    contract = (root / "final_contract_api.py").read_text(encoding="utf-8")
+    assert "final_contract_router" in main
+    assert '@router.get("/shifts")' in contract
+    assert "Shift.employee_id == user.employee_id" in contract
+    assert '@router.get("/shifts/previous")' in contract
+    assert '@router.get("/shifts/close-reports")' in contract
+    assert '@router.get("/salary")' in contract

@@ -2,7 +2,11 @@ name: QA
 
 on:
   push:
-    branches: [qa-harness]
+    branches: [main, qa-harness]
+    paths:
+      - 'app/webapp/static/**'
+      - 'qa/**'
+      - '.github/workflows/qa.yml'
   pull_request:
     branches: [main]
     paths:
@@ -26,7 +30,7 @@ jobs:
           node --check app/webapp/static/role-ui-v2.js
       - name: Start static QA server
         run: |
-          python -m http.server 4173 --directory app/webapp/static > /tmp/qa-server.log 2>&1 &
+          python -m http.server 4173 --directory app/webapp > /tmp/qa-server.log 2>&1 &
           echo $! > /tmp/qa-server.pid
       - uses: actions/setup-node@v4
         with:
@@ -37,7 +41,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run browser smoke checks
         env:
-          QA_URL: http://127.0.0.1:4173/qa.html
+          QA_URL: http://127.0.0.1:4173/static/qa-browser.html
         run: node qa/playwright.mjs
       - name: Upload QA screenshot
         if: always()

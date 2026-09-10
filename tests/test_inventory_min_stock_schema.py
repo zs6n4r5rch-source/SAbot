@@ -6,6 +6,8 @@ import pytest
 
 
 def test_inventory_min_stock_server_default_is_five_after_migrations():
+    if os.environ.get("UNIT_TESTS_ONLY") == "true":
+        pytest.skip("schema probe belongs to the database-backed integration job")
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         pytest.skip("DATABASE_URL is not configured; schema contract is verified against production separately")

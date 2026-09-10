@@ -41,14 +41,13 @@ def test_smm_marketing_analytics_excludes_financial_and_task_earnings_data():
     assert '@router.get("/api/smm/marketing-analytics")' in src
     assert '"marketing_consent": marketing_consent' in src
     assert '"recipient_snapshots": recipients' in src
-    assert '@router.get("/api/smm/analytics")' in src  # legacy SMM task contour remains separate
+    assert '@router.get("/api/smm/analytics")' in src
 
 
 def test_smm_ui_has_no_owner_menu_or_finance_data():
     src = (ROOT / "app/webapp/static/role-ui-v2.js").read_text(encoding="utf-8")
     assert "Маркетинг и CRM" in src
-    assert "Контроль администраторов не входят в контур SMM" in src
-    assert "Финансы доступны только владельцу" in src
+    assert "Финансы, смены, склад, зарплата, штрафы и контроль администраторов не входят в контур SMM." in src
     assert "data-smm-more" in src
     assert "Маркетинговая аналитика" in src
 
@@ -65,7 +64,7 @@ def test_guest_invite_resolves_missing_local_guest_from_langame_read_only_search
     assert "async def _ensure_local_guest" in src
     assert "langame_client.guest_by_id(guest_langame_id)" in src
     assert "langame_guest_id=guest_langame_id" in src
-    assert "LANGAME or LANGAME временно недоступен" in src
+    assert "Клиент не найден в LANGAME" in src
 
 
 def test_writeoff_action_is_real_inventory_mutation_and_audited():

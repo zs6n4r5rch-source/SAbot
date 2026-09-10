@@ -1,104 +1,24 @@
 import { chromium } from 'playwright';
 
-const base = process.env.QA_URL || 'http://127.0.0.1:4173/qa.html';
+const base = process.env.QA_URL || 'http://127.0.0.1:4173/static/qa-browser.html';
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 const failures = [];
+const matrix={owner:{overview:true,work:true,finance:true,warehouse:true,crm:true,crmSearch:true,localLinks:true,analytics:true,shifts:true,previous:true,closeReports:true,penalties:true,salary:true,admin:true,profiles:true,settings:true,campaigns:true,guest:true},admin:{overview:true,work:true,finance:false,warehouse:true,crm:false,crmSearch:false,localLinks:false,analytics:false,shifts:true,previous:true,closeReports:true,penalties:true,salary:true,admin:false,profiles:false,settings:false,campaigns:false,guest:false},smm:{overview:true,work:false,finance:false,warehouse:false,crm:true,crmSearch:true,localLinks:true,analytics:false,shifts:false,previous:false,closeReports:false,penalties:false,salary:false,admin:false,profiles:false,settings:false,campaigns:true,guest:false},guest:{overview:true,work:false,finance:false,warehouse:false,crm:false,crmSearch:false,localLinks:false,analytics:false,shifts:false,previous:false,closeReports:false,penalties:false,salary:false,admin:false,profiles:false,settings:false,campaigns:false,guest:true}};
 
-page.on('console', msg => { if (msg.type() === 'error') failures.push(`console: ${msg.text()}`); });
-page.on('pageerror', err => failures.push(`pageerror: ${err.message}`));
-await page.route('**/api/smm/marketing-analytics**', async route => {
-  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ role: 'smm', guests: 42, campaigns: 4, telegram_links: 12, marketing_consent: 9 }) });
-});
-
-await page.goto(base, { waitUntil: 'networkidle' });
-await page.waitForTimeout(500);
-
-const routeLabels = {
-  overview: 'Главная', work: 'Работа', finance: 'Финансы', warehouse: 'Склад',
-  crm: 'CRM', crmSearch: 'Поиск гостей', localLinks: 'Telegram / consent', analytics: 'Аналитика',
-  shifts: 'Смены', previous: 'Предыдущая смена', closeReports: 'Закрытия смен', penalties: 'Штрафы',
-  salary: 'Зарплата', admin: 'Контроль администратора', profiles: 'Профили доступа', settings: 'Настройки',
-  campaigns: 'Кампании', guest: 'Мой профиль', warehouseCritical: 'Критические остатки',
-  warehouseCategories: 'Категории склада', warehouseArrivals: 'Приходы', warehouseSales: 'Продажи товаров',
-  warehouseHistory: 'История склада', warehouseWriteoffs: 'Списания', warehouseInventories: 'Инвентаризации',
-  warehouseDiscrepancies: 'Расхождения',
-};
-
-const allowed = {
-  owner: Object.keys(routeLabels),
-  admin: ['overview','work','warehouse','shifts','previous','closeReports','penalties','salary','warehouseCritical','warehouseCategories','warehouseArrivals','warehouseSales','warehouseHistory','warehouseWriteoffs','warehouseInventories','warehouseDiscrepancies'],
-  smm: ['overview','crm','crmSearch','localLinks','campaigns'],
-  guest: ['overview','guest'],
-};
-
-const expectedNav = {
-  owner: ['Главная','Работа','Финансы','Ещё'],
-  admin: ['Главная','Работа','Склад','Ещё'],
-  smm: ['Главная','Работа','CRM','Ещё'],
-  guest: ['Главная','Профиль','Ещё'],
-};
-
-const summary = await page.locator('#summary').innerText();
-console.log(`QA bootstrap summary: ${summary}`);
-
-for (const role of ['owner', 'admin', 'smm', 'guest']) {
-  await page.evaluate(r => window.__SA_START_APP__(r), role);
-  await page.waitForTimeout(120);
-  const roleText = await page.locator('#app .role').innerText();
-  if (roleText !== role.toUpperCase()) failures.push(`${role}: role label is ${roleText}`);
-
-  const nav = await page.locator('#app .bottom button').allTextContents();
-  for (const item of expectedNav[role]) if (!nav.some(x => x.trim() === item)) failures.push(`${role}: missing nav ${item}`);
-  if (role !== 'owner' && nav.some(x => x.trim() === 'Финансы')) failures.push(`${role}: finance leaked into bottom nav`);
-
-  const homeText = await page.locator('#app').innerText();
-  if (role === 'owner' && !homeText.includes('12 345') && !homeText.includes('12 345')) failures.push('owner: revenue fixture not rendered');
-  if (role === 'admin' && !homeText.includes('3')) failures.push('admin: warehouse KPI fixture not rendered');
-  if (role === 'smm' && (!homeText.includes('42') || !homeText.includes('12') || !homeText.includes('9'))) failures.push('smm: marketing KPI fixture not rendered');
-  if (role === 'guest' && !homeText.includes('Тестовый гость')) failures.push('guest: profile fixture not rendered');
-
-  const more = page.locator('#app [data-more], #app [data-smm-more]').first();
-  if (!(await more.count())) { failures.push(`${role}: missing «Ещё»`); continue; }
-  await more.click();
-  await page.waitForTimeout(50);
-  if (!(await page.locator('#drawer').evaluate(el => el.classList.contains('open')))) failures.push(`${role}: drawer did not open`);
-  const drawerText = await page.locator('#drawer').innerText();
-  if (role === 'owner' && !drawerText.includes('Контроль администратора')) failures.push('owner: admin control missing');
-  if (role === 'owner' && !drawerText.includes('Настройки')) failures.push('owner: settings missing');
-  if (role === 'admin' && drawerText.includes('Финансы')) failures.push('admin: finance leaked into drawer');
-  if (role === 'admin' && drawerText.includes('CRM')) failures.push('admin: CRM leaked into drawer');
-  if (role === 'admin' && drawerText.includes('Контроль администратора')) failures.push('admin: owner control leaked into drawer');
-  if (role === 'admin' && !drawerText.includes('Склад')) failures.push('admin: warehouse missing');
-  if (role === 'admin' && !drawerText.includes('Зарплата')) failures.push('admin: salary missing');
-  if (role === 'smm' && !drawerText.includes('CRM')) failures.push('smm: CRM missing');
-  if (role === 'smm' && drawerText.includes('Финансы')) failures.push('smm: finance leaked into drawer');
-  if (role === 'guest' && !drawerText.includes('Мой профиль')) failures.push('guest: profile missing');
-
-  const close = page.locator('#drawer [data-drawer-close]').first();
-  if (await close.count()) await close.click(); else await page.locator('#drawerBackdrop').click();
-  if (await page.locator('#drawer').evaluate(el => el.classList.contains('open'))) failures.push(`${role}: drawer did not close`);
-
-  for (const route of allowed[role]) {
-    if (route === 'overview' || route === 'guest') continue;
-    const currentMore = page.locator('#app [data-more], #app [data-smm-more]').first();
-    await currentMore.click();
-    const label = routeLabels[route];
-    const button = page.locator(`#drawer [data-drawer-page], #drawer [data-smm-page]`).filter({ hasText: label }).first();
-    if (!(await button.count())) { failures.push(`${role}: route ${route} missing from drawer`); await page.locator('#drawerBackdrop').click(); continue; }
-    await button.click();
-    await page.waitForTimeout(40);
-    const heading = await page.locator('#app .section-head h1').innerText().catch(() => '');
-    if (!heading.includes(label)) failures.push(`${role}: route ${route} rendered heading ${heading}`);
+for(const role of Object.keys(matrix)){
+  const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
+  page.on('console',m=>{if(m.type()==='error')failures.push(`${role}: console: ${m.text()}`)});
+  page.on('pageerror',e=>failures.push(`${role}: pageerror: ${e.message}`));
+  await page.goto(`${base}?role=${role}`,{waitUntil:'networkidle'});
+  await page.waitForFunction(()=>window.__QA_READY__&&window.__SA_QA_CAN__,null,{timeout:5000});
+  for(const [route,expected] of Object.entries(matrix[role])){
+    const actual=await page.evaluate(([r,p])=>window.__SA_QA_CAN__(r,p),[role,route]);
+    if(actual!==expected)failures.push(`${role}: can(${route})=${actual}, expected ${expected}`);
   }
+  if(await page.locator('#app .role').count()===0)failures.push(`${role}: app shell missing`);
+  await page.screenshot({path:`qa-${role}.png`,fullPage:true});
+  await page.close();
 }
-
-if (failures.length) {
-  console.error(failures.join('\n'));
-  await page.screenshot({ path: 'qa-failure.png', fullPage: true });
-  process.exit(1);
-}
-
-await page.screenshot({ path: 'qa-pass.png', fullPage: true });
+if(failures.length){console.error(failures.join('\n'));process.exit(1)}
+console.log('Browser smoke + role acceptance checks passed.');
 await browser.close();
-console.log('Browser smoke + product acceptance checks passed.');

@@ -7,47 +7,32 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "app" / "webapp" / "static"
 
 
-def _js_blocks(html: str):
-    marker = "<script>"
-    end = "</script>"
-    out = []
-    pos = 0
-    while True:
-        start = html.find(marker, pos)
-        if start < 0:
-            return out
-        start += len(marker)
-        finish = html.find(end, start)
-        assert finish >= 0, "Unclosed inline script in Mini App HTML"
-        out.append(html[start:finish])
-        pos = finish + len(end)
-
-
 def test_mini_app_boot_has_static_fallback_and_explicit_start_contract():
     html = (STATIC / "index.html").read_text(encoding="utf-8")
+    guard = (STATIC / "app-guard.js").read_text(encoding="utf-8")
+    role_ui = (STATIC / "role-ui-v2.js").read_text(encoding="utf-8")
     assert 'id="app"' in html
     assert "Запуск приложения" in html
     assert "window.__SA_START_APP__" in html
-    assert "sa:app-state" in html
-    assert "signal('ready')" in html
-    assert "state.role==='guest'?'guest':'overview'" in html
+    assert "window.__SA_QA_CAN__" in guard
+    assert "sa:app-state" in role_ui
+    assert "signal('loading')" in role_ui
+    assert "signal('ready')" in role_ui
 
 
 def test_mini_app_javascript_syntax():
     node = shutil.which("node")
     if node is None:
         return
-    files = [STATIC / "auth-v2.js", STATIC / "design-v2.js"]
+    files = [
+        STATIC / "app-guard.js",
+        STATIC / "auth-v2.js",
+        STATIC / "design-v2.js",
+        STATIC / "role-ui-v2.js",
+        STATIC / "actions-v2.js",
+    ]
     for path in files:
         subprocess.run([node, "--check", str(path)], check=True, capture_output=True, text=True)
-    html = (STATIC / "index.html").read_text(encoding="utf-8")
-    for block in _js_blocks(html):
-        tmp = ROOT / ".mini_app_js_check.tmp.js"
-        try:
-            tmp.write_text(block, encoding="utf-8")
-            subprocess.run([node, "--check", str(tmp)], check=True, capture_output=True, text=True)
-        finally:
-            tmp.unlink(missing_ok=True)
 
 
 def test_auth_uses_explicit_app_bootstrap_contract():
@@ -57,7 +42,9 @@ def test_auth_uses_explicit_app_bootstrap_contract():
     assert "setTimeout(function(){var app=document.getElementById('app')" not in auth
 
 
-def test_design_has_no_global_mutation_observer():
+def test_design_has_no_global_mutation_observer_and_smm_surface_is_explicit():
     design = (STATIC / "design-v2.js").read_text(encoding="utf-8")
+    role_ui = (STATIC / "role-ui-v2.js").read_text(encoding="utf-8")
     assert "MutationObserver" not in design
-    assert "sa:app-state" in design
+    assert "role-ui-v2.js" in design
+    assert "sa:app-state" in role_ui

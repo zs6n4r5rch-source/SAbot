@@ -1,16 +1,18 @@
 from pathlib import Path
 
 
+ROOT = Path(__file__).resolve().parents[1]
+STATIC = ROOT / "app" / "webapp" / "static"
+
+
 def test_active_mini_app_contains_management_sections():
-    root = Path(__file__).parents[1]
-    html = (root / "app" / "webapp" / "static" / "index.html").read_text(encoding="utf-8")
-    for label in ["Главная", "Work Center", "Финансы", "Склад", "CRM", "Аналитика"]:
-        assert label in html
+    guard = (STATIC / "app-guard.js").read_text(encoding="utf-8")
+    for label in ["Главная", "Работа", "Финансы", "Склад", "CRM", "Аналитика"]:
+        assert label in guard
 
 
 def test_active_mini_app_uses_unified_api_routes():
-    root = Path(__file__).parents[1]
-    html = (root / "app" / "webapp" / "static" / "index.html").read_text(encoding="utf-8")
+    guard = (STATIC / "app-guard.js").read_text(encoding="utf-8")
     for route in [
         "/api/app/overview",
         "/api/app/work-center",
@@ -19,7 +21,7 @@ def test_active_mini_app_uses_unified_api_routes():
         "/api/app/crm/groups",
         "/api/app/analytics",
     ]:
-        assert route in html
+        assert route in guard
 
 
 def test_unified_server_exposes_active_mini_app_routes():
