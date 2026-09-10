@@ -36,6 +36,11 @@ def test_access_rejects_unknown_or_inactive_users():
     assert "if user is None or not user.active" in src
 
 
+def test_webapp_rejects_future_telegram_initdata():
+    src = (ROOT / "app/webapp/app.py").read_text(encoding="utf-8")
+    assert "auth_date > now + 60" in src
+
+
 def test_langame_client_has_no_generic_write_path():
     src = (ROOT / "app/services/langame.py").read_text(encoding="utf-8")
     assert "MUTATING_METHODS" in src
