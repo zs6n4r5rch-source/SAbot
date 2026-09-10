@@ -41,7 +41,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run browser smoke checks
         env:
-          QA_URL: http://127.0.0.1:4173/static/qa.html
+          QA_URL: http://127.0.0.1:4173/static/qa-browser.html
         run: node qa/playwright.mjs
       - name: Upload QA screenshot
         if: always()
