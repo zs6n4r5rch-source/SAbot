@@ -6,7 +6,7 @@ STATIC = ROOT / "app" / "webapp" / "static"
 
 def test_active_mini_app_contains_management_sections():
     guard = (STATIC / "app-guard.js").read_text(encoding="utf-8")
-    for label in ["Главная", "Работа", "Финансы", "Склад", "CRM", "Аналитика"]:
+    for label in ["Главная", "Работа", "Финансы", "Склад", "Группы гостей", "Аналитика"]:
         assert label in guard
 
 
