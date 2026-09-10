@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import desc, func, select
+from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
-from app.models import Employee, Discrepancy, Guest, SalaryPeriod, Shift, Writeoff
+from app.models import Employee, Discrepancy, Guest, InventoryBalance, Product, SalaryPeriod, Shift, Writeoff
 from app.permissions import Permission, require_permission
 from app.services.langame import LangameAPIError, langame_client
+from app.services.timezone_policy import local_day_bounds, local_period_bounds, club_tz
 from app.webapp.app import current_user
 
 router = APIRouter(prefix="/api/app/live", tags=["live-langame"])
@@ -48,8 +50,6 @@ def number(value: Any) -> float:
 
 
 def money_value(row: dict) -> float:
-    # LANGAME public API has used several names for transaction totals.
-    # Prefer an explicit total/sum field; never add multiple aliases together.
     value = first(row, "amount", "sum", "total", "total_amount", "amount_total", "price", "cost")
     return number(value)
 
@@ -59,6 +59,11 @@ def payment_label(row: dict) -> str:
     if isinstance(value, dict):
         value = first(value, "name", "title", "code", "id")
     return str(value) if value not in (None, "") else "Не определено"
+
+
+def cancelled(row: dict) -> bool:
+    value = first(row, "cancel", "cancelled", "is_cancelled", default=0)
+    return str(value).lower() in {"1", "true", "yes"}
 
 
 async def paged(method, *args, **kwargs) -> list[dict]:
@@ -97,24 +102,42 @@ def owner(user):
     require_permission(user.role, Permission.READ_ALL)
 
 
+def period_bounds(days: int, period: str | None):
+    if period == "month":
+        return local_day_bounds()
+    return local_period_bounds(days)
+
+
+def row_local_date(row: dict):
+    raw = first(row, "created_at", "date", "datetime", "started_at", "timestamp", "operation_date")
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(club_tz()).date().isoformat()
+    except Exception:
+        return str(raw)[:10] if len(str(raw)) >= 10 else None
+
+
 @router.get("/overview")
 async def live_overview(request: Request, days: int = 1):
     user = await actor(request)
     owner(user)
     days = min(max(days, 1), 365)
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days)
+    start, end = local_period_bounds(days)
     try:
-        tx = await transaction_rows(start, end)
-        products = await product_rows(start, end)
-        sessions = await session_rows(start, end)
+        tx, products, sessions = await asyncio.gather(
+            transaction_rows(start, end), product_rows(start, end), session_rows(start, end)
+        )
     except LangameAPIError as exc:
         raise HTTPException(502, f"LANGAME metrics unavailable: {exc}") from exc
 
     revenue = 0.0
     payments: dict[str, float] = {}
     for row in tx:
-        if int(first(row, "cancel", "cancelled", "is_cancelled", default=0) or 0) == 1:
+        if cancelled(row):
             continue
         amount = money_value(row)
         if amount <= 0:
@@ -126,7 +149,7 @@ async def live_overview(request: Request, days: int = 1):
     product_revenue = 0.0
     product_units = 0.0
     for row in products:
-        if int(first(row, "cancel", "cancelled", "is_cancelled", default=0) or 0) == 1:
+        if cancelled(row):
             continue
         qty = number(first(row, "count", "quantity", "qty", default=0))
         price = number(first(row, "price_sale", "sale_price", "price", "amount", default=0))
@@ -147,25 +170,27 @@ async def live_overview(request: Request, days: int = 1):
 
 
 @router.get("/analytics")
-async def live_analytics(request: Request, days: int = 30):
+async def live_analytics(request: Request, days: int = 30, period: str | None = None):
     user = await actor(request)
     owner(user)
     days = min(max(days, 1), 365)
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days)
+    start, end = period_bounds(days, period)
+    period_label = "current_month" if period == "month" else f"{days}d"
     try:
-        tx, products, sessions = await __import__("asyncio").gather(
+        tx, products, sessions = await asyncio.gather(
             transaction_rows(start, end), product_rows(start, end), session_rows(start, end)
         )
     except LangameAPIError as exc:
         raise HTTPException(502, f"LANGAME analytics unavailable: {exc}") from exc
 
-    revenue = sum(max(0.0, money_value(x)) for x in tx if int(first(x, "cancel", "cancelled", "is_cancelled", default=0) or 0) != 1)
+    valid_tx = [x for x in tx if not cancelled(x) and money_value(x) > 0]
+    valid_products = [x for x in products if not cancelled(x)]
+    revenue = sum(money_value(x) for x in valid_tx)
     product_revenue = sum(
         number(first(x, "count", "quantity", "qty", default=0)) * number(first(x, "price_sale", "sale_price", "price", "amount", default=0))
-        for x in products if int(first(x, "cancel", "cancelled", "is_cancelled", default=0) or 0) != 1
+        for x in valid_products
     )
-    units = sum(number(first(x, "count", "quantity", "qty", default=0)) for x in products)
+    units = sum(number(first(x, "count", "quantity", "qty", default=0)) for x in valid_products)
     guests = {first(x, "guest_id", "client_id", "user_id") for x in sessions}
     guests.discard(None)
 
@@ -181,31 +206,72 @@ async def live_analytics(request: Request, days: int = 30):
 
     hours = 0.0
     ranking: dict[int, dict] = {}
+    langame_shift_to_employee: dict[int, int] = {}
     for shift, employee in shift_rows:
-        if shift.ended_at and shift.ended_at > shift.started_at:
-            hours += (shift.ended_at - shift.started_at).total_seconds() / 3600
         key = shift.employee_id or 0
-        item = ranking.setdefault(key, {"employee_id": key, "employee": employee.full_name if employee else "Не указан", "shifts": 0, "hours": 0.0})
+        item = ranking.setdefault(key, {"employee_id": key, "employee": employee.full_name if employee else "Не указан", "shifts": 0, "hours": 0.0, "product_sales": 0.0, "product_units": 0.0})
         item["shifts"] += 1
+        if shift.langame_shift_id is not None:
+            langame_shift_to_employee[int(shift.langame_shift_id)] = key
         if shift.ended_at and shift.ended_at > shift.started_at:
-            item["hours"] += (shift.ended_at - shift.started_at).total_seconds() / 3600
+            duration = (shift.ended_at - shift.started_at).total_seconds() / 3600
+            hours += duration
+            item["hours"] += duration
+
+    # LANGAME product-expense rows expose working_shift_id. Use that exact
+    # relationship for admin attribution; never divide club revenue by every admin's hours.
+    for row in valid_products:
+        sid = first(row, "working_shift_id", "shift_id")
+        if sid is None:
+            continue
+        try:
+            employee_id = langame_shift_to_employee.get(int(sid))
+        except (TypeError, ValueError):
+            employee_id = None
+        if employee_id is None:
+            continue
+        qty = number(first(row, "count", "quantity", "qty", default=0))
+        amount = qty * number(first(row, "price_sale", "sale_price", "price", "amount", default=0))
+        ranking[employee_id]["product_sales"] += amount
+        ranking[employee_id]["product_units"] += qty
 
     for item in ranking.values():
-        item["sales_per_hour"] = revenue / item["hours"] if item["hours"] else None
+        item["sales_per_hour"] = item["product_sales"] / item["hours"] if item["hours"] else None
+
+    daily: dict[str, dict] = {}
+    for row in valid_tx:
+        day = row_local_date(row)
+        if day:
+            daily.setdefault(day, {"date": day, "revenue": 0.0, "product_revenue": 0.0, "transactions": 0, "sessions": 0, "unique_guests": 0})
+            daily[day]["revenue"] += money_value(row)
+            daily[day]["transactions"] += 1
+    for row in valid_products:
+        day = row_local_date(row)
+        if day:
+            daily.setdefault(day, {"date": day, "revenue": 0.0, "product_revenue": 0.0, "transactions": 0, "sessions": 0, "unique_guests": 0})
+            daily[day]["product_revenue"] += number(first(row, "count", "quantity", "qty", default=0)) * number(first(row, "price_sale", "sale_price", "price", "amount", default=0))
+    for row in sessions:
+        day = row_local_date(row)
+        if day:
+            daily.setdefault(day, {"date": day, "revenue": 0.0, "product_revenue": 0.0, "transactions": 0, "sessions": 0, "unique_guests": 0})
+            daily[day]["sessions"] += 1
+    for day in sorted(daily):
+        daily[day]["unique_guests"] = len({first(x, "guest_id", "client_id", "user_id") for x in sessions if row_local_date(x) == day} - {None})
 
     return {
         "source": "LANGAME + SAbot local control",
         "live": True,
         "as_of": datetime.now(timezone.utc).isoformat(),
         "days": days,
+        "period": period_label,
         "kpi": {
             "revenue": revenue,
             "product_revenue": product_revenue,
             "product_units": units,
-            "transactions": len(tx),
+            "transactions": len(valid_tx),
             "guest_sessions": len(sessions),
             "unique_guests": len(guests),
-            "average_check": revenue / len(tx) if tx else None,
+            "average_check": revenue / len(valid_tx) if valid_tx else None,
             "revenue_per_guest": revenue / len(guests) if guests else None,
             "shifts": len(shift_rows),
             "hours": hours,
@@ -215,9 +281,9 @@ async def live_analytics(request: Request, days: int = 30):
             "cash_difference": float(cash_difference or 0),
             "salary_total": float(salary_total or 0),
         },
-        "admin_ranking": sorted(ranking.values(), key=lambda x: (x["sales_per_hour"] or -1, x["shifts"]), reverse=True),
-        "daily": [],
-        "limitations": {"retention": None, "occupancy": None, "revenue_attribution_to_admin": "local shifts only; LANGAME transaction attribution is not assumed"},
+        "admin_ranking": sorted(ranking.values(), key=lambda x: (x["sales_per_hour"] is not None, x["sales_per_hour"] or -1, x["shifts"]), reverse=True),
+        "daily": list(daily.values()),
+        "limitations": {"retention": None, "occupancy": None, "revenue_attribution_to_admin": "product sales only via LANGAME working_shift_id; unlinked revenue is not attributed"},
     }
 
 
@@ -228,6 +294,11 @@ async def live_warehouse(request: Request):
     try:
         clubs = rows_of(await langame_client.clubs())
         products = rows_of(await langame_client.products())
+        async with SessionLocal() as session:
+            local_rows = (await session.execute(
+                select(InventoryBalance, Product).join(Product, Product.id == InventoryBalance.product_id)
+            )).all()
+        min_stock = {(int(b.club_id), int(p.langame_product_id)): float(b.min_stock or 0) for b, p in local_rows}
         result: list[dict] = []
         for club in clubs:
             club_id = first(club, "id", "club_id", "clubId")
@@ -245,7 +316,9 @@ async def live_warehouse(request: Request):
                 qty = first(row, "quantity", "balance", "count", "stock", "amount", default=None)
                 if qty is None and isinstance(nested, dict):
                     qty = first(nested, "quantity", "balance", "count", "stock", "amount", default=0)
-                result.append({"id": pid, "product": name or f"Товар #{pid}", "club_id": club_id, "club": first(club, "name", "title", default=f"Клуб #{club_id}"), "quantity": number(qty), "source": "LANGAME"})
+                quantity_value = number(qty)
+                threshold = min_stock.get((int(club_id), int(pid))) if pid is not None else None
+                result.append({"id": pid, "product": name or f"Товар #{pid}", "club_id": club_id, "club": first(club, "name", "title", default=f"Клуб #{club_id}"), "quantity": quantity_value, "min_stock": threshold, "critical": bool(threshold is not None and threshold > 0 and quantity_value <= threshold), "source": "LANGAME"})
         categories: dict[str, int] = {}
         for p in products:
             category = p.get("category") or p.get("group") or p.get("category_name") or p.get("group_name")
