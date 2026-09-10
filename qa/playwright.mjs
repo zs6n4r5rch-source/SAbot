@@ -1,37 +1,14 @@
 import { chromium } from 'playwright';
 
-const base = process.env.QA_URL || 'http://127.0.0.1:4173/qa.html';
+const base = process.env.QA_URL || 'http://127.0.0.1:4173/static/qa.html';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 const failures = [];
 
 page.on('console', msg => { if (msg.type() === 'error') failures.push(`console: ${msg.text()}`); });
 page.on('pageerror', err => failures.push(`pageerror: ${err.message}`));
-await page.route('**/api/app/**', async route => {
-  const url = new URL(route.request().url());
-  let body = {
-    revenue: { total: 12345, products: 2345 },
-    payments: { cash: 5000, card: 6000, mobile: 1345 },
-    kpi: { guests: 42, open_shifts: 1 },
-    open_shifts: 1,
-    critical_stock: 3,
-    pending_writeoffs: 1,
-    open_discrepancies: 0,
-    guest_count: 42,
-    groups_count: 4,
-    linked_guests: 12,
-    campaigns_count: 4,
-    name: 'Тестовый гость',
-    marketing_consent: true,
-    balance: 1000,
-    bonuses: 50,
-    items: [],
-  };
-  if (url.pathname.endsWith('/analytics')) body = { ...body, periods: {}, admins: [], sales: {}, inventory: {}, salary: {}, clients: {} };
-  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-});
 await page.goto(base, { waitUntil: 'networkidle' });
-await page.waitForTimeout(500);
+await page.waitForTimeout(600);
 
 const routeLabels = {
   overview: 'Главная', work: 'Работа', finance: 'Финансы', warehouse: 'Склад',
@@ -58,12 +35,14 @@ const expectedNav = {
   guest: ['Главная','Профиль','Ещё'],
 };
 
-const summary = await page.locator('#app').innerText();
-console.log(`QA bootstrap summary: ${summary.slice(0, 80)}`);
+console.log(`QA bootstrap summary: ${await page.locator('#summary').innerText()}`);
 
 for (const role of ['owner', 'admin', 'smm', 'guest']) {
-  await page.evaluate(r => window.__SA_START_APP__(r), role);
-  await page.waitForTimeout(120);
+  const roleButton = page.locator(`#roles [data-role="${role}"]`).first();
+  if (!(await roleButton.count())) { failures.push(`${role}: missing QA role control`); continue; }
+  await roleButton.click();
+  await page.waitForTimeout(80);
+
   const roleText = await page.locator('#app .role').innerText();
   if (roleText !== role.toUpperCase()) failures.push(`${role}: role label is ${roleText}`);
 
@@ -77,7 +56,7 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
   if (role === 'smm' && (!homeText.includes('42') || !homeText.includes('12') || !homeText.includes('4'))) failures.push('smm: marketing KPI fixture not rendered');
   if (role === 'guest' && !homeText.includes('Тестовый гость')) failures.push('guest: profile fixture not rendered');
 
-  const more = page.locator('#app [data-more], #app [data-smm-more]').first();
+  const more = page.locator('#app [data-more]').first();
   if (!(await more.count())) { failures.push(`${role}: missing «Ещё»`); continue; }
   await more.click();
   await page.waitForTimeout(50);
@@ -101,10 +80,10 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
 
   for (const route of allowed[role]) {
     if (route === 'overview' || route === 'guest') continue;
-    const currentMore = page.locator('#app [data-more], #app [data-smm-more]').first();
+    const currentMore = page.locator('#app [data-more]').first();
     await currentMore.click();
     const label = routeLabels[route];
-    const button = page.locator(`#drawer [data-drawer-page], #drawer [data-smm-page]`).filter({ hasText: label }).first();
+    const button = page.locator(`#drawer [data-drawer-page]`).filter({ hasText: label }).first();
     if (!(await button.count())) {
       failures.push(`${role}: route ${route} missing from drawer`);
       if (await page.locator('#drawer').evaluate(el => el.classList.contains('open'))) await page.locator('#drawerBackdrop').evaluate(el => el.click());
