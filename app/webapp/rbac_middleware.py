@@ -10,8 +10,8 @@ from app.webapp.langame_live import warehouse_arrivals, warehouse_items, warehou
 
 ROLE_PATHS = {
     "owner": None,
-    # Admin is operational only. CRM/admin-control/settings/salary stay owner-only.
-    "admin": ("/overview", "/work-center", "/warehouse", "/shifts", "/penalties", "/live/warehouse"),
+    # Admin is operational only. CRM/admin-control/settings/salary/penalties stay owner-only.
+    "admin": ("/overview", "/work-center", "/warehouse", "/shifts", "/live/warehouse", "/bonuses"),
     "smm": ("/overview", "/crm", "/smm/"),
     "guest": ("/guest/",),
 }
@@ -55,6 +55,8 @@ class UnifiedRBACMiddleware:
             response=JSONResponse({"detail":"Unified API role is not configured"},status_code=403); await response(scope,receive,send); return
         if path=="/api/app/salary" and role!="owner":
             response=JSONResponse({"detail":"Salary access is restricted to owner"},status_code=403); await response(scope,receive,send); return
+        if path=="/api/app/penalties" and role!="owner":
+            response=JSONResponse({"detail":"Penalty access is restricted to owner"},status_code=403); await response(scope,receive,send); return
         allowed=ROLE_PATHS[role]
         if allowed is not None and not any(path.startswith("/api/app"+prefix) for prefix in allowed):
             response=JSONResponse({"detail":"Раздел недоступен для этой роли"},status_code=403); await response(scope,receive,send); return
