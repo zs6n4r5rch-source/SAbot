@@ -9,6 +9,7 @@ from app.webapp.app import current_user
 from app.webapp.langame_live import warehouse_arrivals, warehouse_items, warehouse_sales
 
 
+# Supported unified roles: "owner", "admin", "smm", "guest".
 ROLE_PATHS = {
     "owner": None,
     "admin": (
