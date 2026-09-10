@@ -1,16 +1,17 @@
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_mini_app_has_static_fallback_and_deterministic_start_contract():
-    src = (ROOT / "app/webapp/static/index.html").read_text(encoding="utf-8")
-    assert "boot-fallback" in src
-    assert "window.__SA_START_APP__" in src
-    assert "X-Telegram-Init-Data" in src
-    assert "cache:'no-store'" in src
-    assert "sa:app-state" in src
-    assert "state==='ready'" in src
+    index = (ROOT / "app/webapp/static/index.html").read_text(encoding="utf-8")
+    guard = (ROOT / "app/webapp/static/app-guard.js").read_text(encoding="utf-8")
+    assert "boot-fallback" in index
+    assert "window.__SA_START_APP__" in index
+    assert "X-Telegram-Init-Data" in guard
+    assert "cache:'no-store'" in guard
+    assert "signal('ready')" in guard
 
 
 def test_auth_gate_does_not_disappear_before_application_start():
