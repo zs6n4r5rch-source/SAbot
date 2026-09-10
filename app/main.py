@@ -35,12 +35,13 @@ from app.webapp.final_contract_api import router as final_contract_router
 from app.webapp.guest_invites_api import router as guest_invites_router
 from app.webapp.actions_api import router as actions_api_router
 from app.webapp.auth_api import router as auth_api_router
+from app.webapp.live_metrics_api import router as live_metrics_router
 from app.webapp.rbac_middleware import UnifiedRBACMiddleware
 from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)
-UI_VERSION = "r1-r3-unified-11"
+UI_VERSION = "r1-r3-unified-12"
 
 
 def mini_app_url_with_version(url):
@@ -87,10 +88,9 @@ async def main():
     web_app.include_router(social_api_router)
     web_app.include_router(telegram_webhook_router)
     web_app.include_router(owner_dashboard_router)
-    # Final contract routes are registered before the legacy unified router so
-    # role-specific subject scoping wins over older broad read endpoints.
     web_app.include_router(final_contract_router)
     web_app.include_router(guest_invites_router)
+    web_app.include_router(live_metrics_router)
     web_app.include_router(unified_api_router)
     web_app.include_router(actions_api_router)
     web_app.include_router(auth_api_router)
