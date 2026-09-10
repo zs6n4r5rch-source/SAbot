@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
-from app.models import SalaryPeriod, SalaryViolation, Shift
+from app.models import Guest, SalaryPeriod, SalaryViolation, Shift
 from app.services.timezone_policy import local_day_bounds, timezone_name
 from app.webapp.app import current_user
 from app.webapp.unified_api import product_sales_totals
@@ -41,6 +41,7 @@ async def owner_overview(request: Request):
         card = await session.scalar(select(func.coalesce(func.sum(Shift.card_sales), 0)).where(Shift.started_at >= start, Shift.started_at <= end)) or 0
         mobile = await session.scalar(select(func.coalesce(func.sum(Shift.mobile_sales), 0)).where(Shift.started_at >= start, Shift.started_at <= end)) or 0
         open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None))) or 0
+        guests = await session.scalar(select(func.count(Guest.id))) or 0
     products, units = await product_sales_totals(start, end)
     till = money(cash) + money(card) + money(mobile)
     return {
@@ -49,7 +50,7 @@ async def owner_overview(request: Request):
         "period": {"from": start.isoformat(), "to": end.isoformat()},
         "revenue": {"till": till, "products": products, "total": till, "gaming": None, "other": None, "product_units": units},
         "payments": {"cash": money(cash), "card": money(card), "mobile": money(mobile)},
-        "kpi": {"guests": None, "new_guests": None, "average_check": None, "open_shifts": int(open_shifts)},
+        "kpi": {"guests": int(guests), "new_guests": None, "average_check": None, "open_shifts": int(open_shifts)},
         "source_status": {"langame": "ok"},
         "notes": ["Касса и продажи товаров разделены.", "Неподтверждённые gaming/прочие доходы не подменяются нулём."],
     }
