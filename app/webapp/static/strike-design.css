@@ -15,8 +15,10 @@
 }
 html,body{background:var(--bg);color:var(--text)}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.005em}
+button,input,textarea,select{font:inherit}
 button{border:1px solid var(--line);background:var(--surface-2);border-radius:var(--radius);min-height:46px;padding:11px 14px;font-weight:750;transition:background .15s ease,border-color .15s ease,transform .08s ease}
 button:active{transform:scale(.985)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 button.primary{background:var(--accent);border-color:var(--accent);color:#080a0b}
 button.ghost{background:transparent}
 button:hover{border-color:#3a424c}
@@ -63,5 +65,18 @@ button:hover{border-color:#3a424c}
 .table th,.table td{padding:9px;border-bottom:1px solid var(--line)}
 .pill{padding:6px 9px}
 .boot-card{border:0;border-top:1px solid var(--line);border-radius:0;background:var(--surface);padding:28px 20px}
-@media(max-width:699px){.section-head h1{font-size:30px}.stat .value{font-size:27px}}
+/* Keep the authorization gate inside the same Strike Arena visual language. */
+.sa-auth{background:rgba(7,8,11,.98)!important;padding:28px 16px 100px!important}
+.sa-auth-card{width:min(100%,620px)!important;padding:8px 0!important}
+.sa-auth-brand{font-size:22px!important;margin-bottom:18px!important}
+.sa-auth-brand i{width:15px!important;height:15px!important;background:var(--accent)!important}
+.sa-auth-card h1{font-size:30px!important;letter-spacing:-.04em!important;margin:0 0 8px!important}
+.sa-auth-card>p{color:var(--muted)!important;line-height:1.45!important;margin:0!important}
+.sa-auth-grid{gap:0!important;margin-top:20px!important;border-top:1px solid var(--line)!important}
+.sa-auth-btn{min-height:72px!important;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:0!important;background:transparent!important;padding:15px 4px!important}
+.sa-auth-btn b{font-size:17px!important}
+.sa-auth-btn span{font-size:13px!important;color:var(--muted)!important}
+.sa-auth-note{background:var(--surface)!important;border-radius:10px!important;border-left:2px solid var(--danger)!important;padding:12px 14px!important}
+@media(max-width:699px){.section-head h1{font-size:30px}.stat .value{font-size:27px}.actions-grid{grid-template-columns:1fr 1fr}}
 @media(min-width:700px){.bottom{width:min(680px,calc(100% - 24px))}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
