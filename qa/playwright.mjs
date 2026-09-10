@@ -86,7 +86,7 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
     const label = routeLabels[route];
     const button = page.locator(`#drawer [data-drawer-page], #drawer [data-smm-page]`).filter({ hasText: label }).first();
     if (!(await button.count())) { failures.push(`${role}: route ${route} missing from drawer`); await page.locator('#drawerBackdrop').click(); continue; }
-    await button.click({ force: true });
+    await button.evaluate(el => el.click());
     await page.waitForTimeout(40);
     const heading = await page.locator('#app .section-head h1').innerText().catch(() => '');
     if (!heading.includes(label)) failures.push(`${role}: route ${route} rendered heading ${heading}`);
