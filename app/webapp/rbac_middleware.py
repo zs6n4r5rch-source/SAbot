@@ -8,12 +8,10 @@ from app.services.langame import LangameAPIError
 from app.webapp.app import current_user
 from app.webapp.langame_live import warehouse_arrivals, warehouse_items, warehouse_sales
 
-
-# Supported unified roles: "owner", "admin", "smm", "guest".
 ROLE_PATHS = {
     "owner": None,
-    "admin": ("/overview", "/work-center", "/crm", "/warehouse", "/shifts", "/penalties", "/salary", "/admin/", "/settings"),
-    "smm": ("/overview", "/crm", "/smm/"),
+    "admin": ("/overview", "/work-center", "/crm", "/warehouse", "/shifts", "/penalties", "/admin/", "/settings", "/live/"),
+    "smm": ("/overview", "/crm", "/smm/", "/live/"),
     "guest": ("/guest/",),
 }
 
@@ -23,28 +21,13 @@ async def safe_overview(role: str):
         if role == "admin":
             critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock)) or 0
             open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None))) or 0
-            return {
-                "role": role,
-                "timezone": None,
-                "revenue": {"products": None, "gaming": None, "other": None, "total": None, "product_units": None},
-                "attention": ([{"key": "critical_stock", "count": critical, "title": "Критический склад", "target": "warehouse"}] if critical else []),
-                "kpi": {"guests": None, "new_guests": None, "average_check": None, "open_shifts": open_shifts},
-                "source_status": {"langame": "limited_by_role"},
-            }
+            return {"role": role, "timezone": None, "revenue": {"products": None, "gaming": None, "other": None, "total": None, "product_units": None}, "attention": ([{"key": "critical_stock", "count": critical, "title": "Критический склад", "target": "warehouse"}] if critical else []), "kpi": {"guests": None, "new_guests": None, "average_check": None, "open_shifts": open_shifts}, "source_status": {"langame": "limited_by_role"}}
         guests = await session.scalar(select(func.count(Guest.id))) or 0
-        return {
-            "role": role,
-            "timezone": None,
-            "revenue": {"products": None, "gaming": None, "other": None, "total": None, "product_units": None},
-            "attention": [],
-            "kpi": {"guests": guests, "new_guests": None, "average_check": None, "open_shifts": None},
-            "source_status": {"langame": "marketing_contour"},
-        }
+        return {"role": role, "timezone": None, "revenue": {"products": None, "gaming": None, "other": None, "total": None, "product_units": None}, "attention": [], "kpi": {"guests": guests, "new_guests": None, "average_check": None, "open_shifts": None}, "source_status": {"langame": "marketing_contour"}}
 
 
 async def _live_data(path: str, role: str, request: Request):
     from datetime import datetime, timedelta, timezone
-
     now = datetime.now(timezone.utc)
     if path == "/api/app/warehouse":
         return await warehouse_items()
@@ -82,6 +65,10 @@ class UnifiedRBACMiddleware:
             response = JSONResponse({"detail": "Unified API role is not configured"}, status_code=403)
             await response(scope, receive, send)
             return
+        if path == "/api/app/salary" and role != "owner":
+            response = JSONResponse({"detail": "Salary access is restricted to owner"}, status_code=403)
+            await response(scope, receive, send)
+            return
         allowed = ROLE_PATHS[role]
         if allowed is not None and not any(path.startswith("/api/app" + prefix) for prefix in allowed):
             response = JSONResponse({"detail": "Раздел недоступен для этой роли"}, status_code=403)
@@ -92,10 +79,7 @@ class UnifiedRBACMiddleware:
             response = JSONResponse(await safe_overview(role), status_code=200)
             await response(scope, receive, send)
             return
-        if role in {"owner", "admin"} and path in {
-            "/api/app/warehouse", "/api/app/warehouse/critical",
-            "/api/app/warehouse/arrivals", "/api/app/warehouse/sales",
-        }:
+        if role in {"owner", "admin"} and path in {"/api/app/warehouse", "/api/app/warehouse/critical", "/api/app/warehouse/arrivals", "/api/app/warehouse/sales"}:
             try:
                 response_data = await _live_data(path, role, request)
                 if response_data is not None:
