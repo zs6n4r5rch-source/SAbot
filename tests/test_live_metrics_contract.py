@@ -13,7 +13,8 @@ def test_live_metrics_module_parses_and_uses_langame_sources():
     assert "langame_client.stock" in source
     assert "langame_client.guest_groups" in source
     assert "working_shift_id" in source
-    assert "local_day_bounds" in source
+    assert "local_period_bounds" in source
+    assert "local_month_bounds" in source
     assert 'period == "month"' in source
 
 
