@@ -42,49 +42,51 @@ def product_key(row: dict):
 
 
 def product_name(row: dict) -> str:
+    nested = row.get("product") or row.get("goods") or row.get("good")
+    if isinstance(nested, dict):
+        return str(first(nested, "name", "title", "product_name", "goods_name", default="Без названия"))
     return str(first(row, "name", "title", "product_name", "goods_name", default="Без названия"))
 
 
 def quantity(row: dict) -> float:
+    nested = row.get("product") or row.get("goods") or row.get("good")
+    if isinstance(nested, dict):
+        value = first(row, "quantity", "balance", "count", "amount", "stock")
+        if value is None:
+            value = first(nested, "quantity", "balance", "count", "amount", "stock", default=0)
+        return number(value)
     return number(first(row, "quantity", "balance", "count", "amount", "stock", default=0))
 
 
 async def warehouse_items() -> dict:
-    products_payload, balances_payload = await _products_and_balances()
-    products = rows_of(products_payload)
-    balances = rows_of(balances_payload)
-    names = {str(product_key(p)): product_name(p) for p in products if product_key(p) is not None}
-
+    clubs_payload = await langame_client.clubs()
+    clubs = rows_of(clubs_payload)
     items: list[dict] = []
-    for balance in balances:
-        key = product_key(balance)
-        if key is None:
+
+    # LANGAME /goods/list is the warehouse source of truth. A separate request is
+    # required per club, so multi-club accounts are represented without inventing
+    # a local mirror as the primary source.
+    for club in clubs:
+        club_id = first(club, "id", "club_id", "clubId")
+        if club_id is None:
             continue
-        name = first(balance, "product_name", "goods_name", "name", default=names.get(str(key), f"Товар #{key}"))
-        club_id = first(balance, "club_id", "club", "clubId")
-        items.append({
-            "id": key,
-            "club_id": club_id,
-            "product": str(name),
-            "category": first(balance, "category_name", "category", default="—"),
-            "quantity": quantity(balance),
-            "min_stock": 0,
-            "critical": False,
-            "source": "langame",
-        })
+        payload = await langame_client.stock(int(club_id), page=1, page_limit=500)
+        for row in rows_of(payload):
+            key = product_key(row)
+            if key is None:
+                continue
+            items.append({
+                "id": key,
+                "club_id": club_id,
+                "club": first(club, "name", "title", default=f"Клуб #{club_id}"),
+                "product": product_name(row),
+                "category": first(row, "category_name", "category", default="—"),
+                "quantity": quantity(row),
+                "min_stock": 0,
+                "critical": False,
+                "source": "langame",
+            })
     return {"source": "langame", "items": items}
-
-
-async def _products_and_balances():
-    return await _gather_readers()
-
-
-async def _gather_readers():
-    # Keep the calls sequential: the shared LANGAME client is deliberately small,
-    # and sequential calls make failures easier to diagnose in production logs.
-    products = await langame_client.products()
-    balances = await langame_client.balances(page=1, page_limit=500)
-    return products, balances
 
 
 async def warehouse_arrivals(days: int, now, start) -> dict:
