@@ -13,8 +13,6 @@ await page.route('**/api/smm/marketing-analytics**', async route => {
 
 await page.goto(base, { waitUntil: 'networkidle' });
 await page.waitForTimeout(500);
-await page.addScriptTag({ url: '/static/role-ui-v2.js?v=qa' });
-await page.waitForTimeout(100);
 
 const routeLabels = {
   overview: 'Главная', work: 'Работа', finance: 'Финансы', warehouse: 'Склад',
