@@ -9,20 +9,28 @@ from app.webapp.app import current_user
 from app.webapp.langame_live import warehouse_arrivals, warehouse_items, warehouse_sales
 
 
-# Supported unified roles: "owner", "admin", "smm", "guest".
 ROLE_PATHS = {
     "owner": None,
-    "admin": ("/overview", "/work-center", "/crm", "/warehouse", "/shifts", "/penalties", "/salary", "/admin/", "/settings"),
+    "admin": (
+        "/overview", "/work-center", "/warehouse", "/shifts", "/penalties", "/salary",
+    ),
     "smm": ("/overview", "/crm", "/smm/"),
-    "guest": ("/guest/",),
+    "guest": ("/overview", "/guest/"),
 }
 
 
 async def safe_overview(role: str):
     async with SessionLocal() as session:
         if role == "admin":
-            critical = await session.scalar(select(func.count(InventoryBalance.id)).where(InventoryBalance.min_stock > 0, InventoryBalance.quantity <= InventoryBalance.min_stock)) or 0
-            open_shifts = await session.scalar(select(func.count(Shift.id)).where(Shift.ended_at.is_(None))) or 0
+            critical = await session.scalar(
+                select(func.count(InventoryBalance.id)).where(
+                    InventoryBalance.min_stock > 0,
+                    InventoryBalance.quantity <= InventoryBalance.min_stock,
+                )
+            ) or 0
+            open_shifts = await session.scalar(
+                select(func.count(Shift.id)).where(Shift.ended_at.is_(None))
+            ) or 0
             return {
                 "role": role,
                 "timezone": None,
@@ -43,12 +51,6 @@ async def safe_overview(role: str):
 
 
 async def _live_data(path: str, role: str, request: Request):
-    """Return read-only LANGAME data for screens whose local mirror is not authoritative.
-
-    The UI must remain useful immediately after deploy or restart; verification sync
-    deliberately does not copy LANGAME into PostgreSQL, so these screens read the
-    source of truth directly.
-    """
     from datetime import datetime, timedelta, timezone
 
     now = datetime.now(timezone.utc)
@@ -67,13 +69,6 @@ async def _live_data(path: str, role: str, request: Request):
 
 
 class UnifiedRBACMiddleware:
-    """Backend guard for the unified Mini App contour.
-
-    Endpoint-level permissions remain authoritative, while this middleware also
-    prevents a role from directly reaching a section outside its approved UI
-    contour. This is intentionally stricter than frontend navigation so hidden
-    routes cannot be reached by hand-crafted requests.
-    """
     def __init__(self, app):
         self.app = app
 
@@ -101,15 +96,13 @@ class UnifiedRBACMiddleware:
             await response(scope, receive, send)
             return
         scope.setdefault("state", {})["unified_role"] = role
-        if path == "/api/app/overview" and role in {"admin", "smm"}:
+        if path == "/api/app/overview" and role in {"admin", "smm", "guest"}:
             response = JSONResponse(await safe_overview(role), status_code=200)
             await response(scope, receive, send)
             return
         if role in {"owner", "admin"} and path in {
-            "/api/app/warehouse",
-            "/api/app/warehouse/critical",
-            "/api/app/warehouse/arrivals",
-            "/api/app/warehouse/sales",
+            "/api/app/warehouse", "/api/app/warehouse/critical",
+            "/api/app/warehouse/arrivals", "/api/app/warehouse/sales",
         }:
             try:
                 response_data = await _live_data(path, role, request)
