@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import desc, select
 
 from app.db.session import SessionLocal
 from app.models import BonusRecord, Employee, UserRole
-from app.services.cleaning_bonus import cleaning_bonus_status, materialize_monthly_cleaning_bonus
+from app.services.cleaning_bonus import cleaning_bonus_status, materialize_monthly_cleaning_bonus, MOSCOW_TZ
 from app.webapp.app import current_user
 
 router = APIRouter(prefix="/api/app", tags=["bonuses"])
@@ -18,7 +19,7 @@ async def _user(request: Request):
 
 
 def _month_now() -> tuple[int, int]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(MOSCOW_TZ)
     return now.year, now.month
 
 
@@ -48,7 +49,8 @@ async def bonuses(request: Request):
         records = (await session.execute(query)).scalars().all()
         names = {}
         if user.role == UserRole.OWNER.value:
-            employees = (await session.execute(select(Employee).where(Employee.id.in_([r.employee_id for r in records])))).scalars().all() if records else []
+            ids = [r.employee_id for r in records]
+            employees = (await session.execute(select(Employee).where(Employee.id.in_(ids)))).scalars().all() if ids else []
             names = {e.id: e.full_name or f"Администратор #{e.id}" for e in employees}
 
     return {
