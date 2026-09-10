@@ -50,6 +50,12 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
   for (const item of expectedNav) if (!nav.some(x => x.trim() === item)) failures.push(`${role}: missing nav ${item}`);
   if (role !== 'owner' && nav.some(x => x.trim() === 'Финансы')) failures.push(`${role}: finance leaked into bottom nav`);
 
+  const homeText = await page.locator('#app').innerText();
+  if (role === 'owner' && !homeText.includes('12 345') && !homeText.includes('12 345')) failures.push('owner: revenue fixture not rendered');
+  if (role === 'admin' && !homeText.includes('3')) failures.push('admin: warehouse KPI fixture not rendered');
+  if (role === 'smm' && (!homeText.includes('42') || !homeText.includes('12') || !homeText.includes('9'))) failures.push('smm: marketing KPI fixture not rendered');
+  if (role === 'guest' && !homeText.includes('Тестовый гость')) failures.push('guest: profile fixture not rendered');
+
   const more = page.locator('#app [data-more], #app [data-smm-more]').first();
   if (!(await more.count())) { failures.push(`${role}: missing «Ещё»`); continue; }
   await more.click();
@@ -71,7 +77,8 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
 
   for (const route of allowed[role]) {
     if (route === 'overview' || route === 'guest') continue;
-    await more.click();
+    const currentMore = page.locator('#app [data-more], #app [data-smm-more]').first();
+    await currentMore.click();
     const label = routeLabels[route];
     const button = page.locator(`#drawer [data-drawer-page], #drawer [data-smm-page]`).filter({ hasText: label }).first();
     if (!(await button.count())) { failures.push(`${role}: route ${route} missing from drawer`); await page.locator('#drawerBackdrop').click(); continue; }
@@ -79,23 +86,6 @@ for (const role of ['owner', 'admin', 'smm', 'guest']) {
     await page.waitForTimeout(40);
     const heading = await page.locator('#app .section-head h1').innerText().catch(() => '');
     if (!heading.includes(label)) failures.push(`${role}: route ${route} rendered heading ${heading}`);
-  }
-
-  if (role === 'owner') {
-    const text = await page.locator('#app').innerText();
-    if (!text.includes('12 345') && !text.includes('12 345')) failures.push('owner: revenue fixture not rendered');
-  }
-  if (role === 'admin') {
-    const text = await page.locator('#app').innerText();
-    if (!text.includes('3')) failures.push('admin: warehouse KPI fixture not rendered');
-  }
-  if (role === 'smm') {
-    const text = await page.locator('#app').innerText();
-    if (!text.includes('42') || !text.includes('12') || !text.includes('9')) failures.push('smm: marketing KPI fixture not rendered');
-  }
-  if (role === 'guest') {
-    const text = await page.locator('#app').innerText();
-    if (!text.includes('Тестовый гость')) failures.push('guest: profile fixture not rendered');
   }
 }
 
