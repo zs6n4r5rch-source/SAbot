@@ -1,11 +1,11 @@
 """Virtual Telegram Mini App authorization tests.
 
-These tests exercise the real FastAPI application in-process. No Telegram or
-LANGAME network calls are intentionally made by the test itself; the suite
-requires a disposable PostgreSQL database and should be run with LANGAME
-access disabled/mocked in CI.
+The suite signs synthetic Telegram WebApp initData and exercises the real
+FastAPI ASGI app in-process. It uses a disposable PostgreSQL database and
+never starts Telegram polling.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -15,6 +15,9 @@ from urllib.parse import urlencode
 
 import httpx
 import pytest
+
+from app.db.session import SessionLocal
+from app.models import AccessProfile, TelegramUser, UserRole
 
 
 USERS = {
@@ -26,10 +29,7 @@ USERS = {
 }
 
 ROLE_SECTIONS = {
-    "owner": {
-        "overview", "work-center", "crm", "warehouse", "shifts", "penalties",
-        "salary", "analytics", "settings", "bonuses",
-    },
+    "owner": {"overview", "work-center", "crm", "warehouse", "shifts", "penalties", "salary", "analytics", "settings", "bonuses"},
     "admin": {"overview", "work-center", "warehouse", "shifts", "bonuses"},
     "smm": {"overview", "crm"},
     "guest": {"guest/me"},
@@ -45,21 +45,53 @@ def make_init_data(bot_token: str, telegram_id: int, username: str | None = None
         "query_id": f"virtual-{telegram_id}",
         "user": json.dumps(user, separators=(",", ":"), ensure_ascii=False),
     }
-    data_check_string = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
+    check_string = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
     secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-    pairs["hash"] = hmac.new(secret, data_check_string.encode(), hashlib.sha256).hexdigest()
+    pairs["hash"] = hmac.new(secret, check_string.encode(), hashlib.sha256).hexdigest()
     return urlencode(pairs)
+
+
+def _seed_users() -> None:
+    async def seed():
+        async with SessionLocal() as session:
+            for telegram_id, username in USERS.values():
+                await session.execute(TelegramUser.__table__.delete().where(TelegramUser.telegram_id == telegram_id))
+            for username in (USERS["owner"][1], USERS["admin"][1], USERS["smm"][1]):
+                await session.execute(AccessProfile.__table__.delete().where(AccessProfile.username == username))
+            session.add_all([
+                AccessProfile(display_name="Virtual Owner", username=USERS["owner"][1], role=UserRole.OWNER.value, active=True),
+                AccessProfile(display_name="Virtual Admin", username=USERS["admin"][1], role=UserRole.ADMIN.value, active=True),
+                AccessProfile(display_name="Virtual SMM", username=USERS["smm"][1], role=UserRole.SMM.value, active=True),
+            ])
+            await session.commit()
+    asyncio.run(seed())
+
+
+def _cleanup_users() -> None:
+    async def cleanup():
+        async with SessionLocal() as session:
+            for telegram_id, _ in USERS.values():
+                await session.execute(TelegramUser.__table__.delete().where(TelegramUser.telegram_id == telegram_id))
+            for username in (USERS["owner"][1], USERS["admin"][1], USERS["smm"][1]):
+                await session.execute(AccessProfile.__table__.delete().where(AccessProfile.username == username))
+            await session.commit()
+    asyncio.run(cleanup())
+
+
+@pytest.fixture(scope="module", autouse=True)
+def seeded_database():
+    if not os.getenv("DATABASE_URL"):
+        pytest.skip("DATABASE_URL is required for virtual Telegram RBAC tests")
+    _seed_users()
+    yield
+    _cleanup_users()
 
 
 @pytest.fixture(scope="module")
 def app_client():
-    """Load the production ASGI app without starting Telegram polling."""
     from app.webapp.app import app
     from app.webapp.rbac_middleware import UnifiedRBACMiddleware
-
-    # app.main normally installs this middleware. The direct fixture makes the
-    # contract explicit while avoiding bot/scheduler startup during pytest.
-    if not any(isinstance(m.cls, type) and m.cls is UnifiedRBACMiddleware for m in app.user_middleware):
+    if not any(m.cls is UnifiedRBACMiddleware for m in app.user_middleware):
         app.add_middleware(UnifiedRBACMiddleware)
     return app
 
@@ -72,47 +104,34 @@ def bot_token():
     return token
 
 
-@pytest.fixture
-def client(app_client, bot_token):
-    transport = httpx.ASGITransport(app=app_client)
-    return httpx.AsyncClient(transport=transport, base_url="http://testserver")
+def request(app, method, path, bot_token, role, **kwargs):
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+            return await client.request(method, path, headers={"X-Telegram-Init-Data": make_init_data(bot_token, *USERS[role])}, **kwargs)
+    return asyncio.run(run())
 
 
-def headers(bot_token, role):
-    telegram_id, username = USERS[role]
-    return {"X-Telegram-Init-Data": make_init_data(bot_token, telegram_id, username)}
+def test_tampered_init_data_is_rejected(app_client, bot_token):
+    init_data = make_init_data(bot_token, *USERS["owner"]) + "x"
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app_client), base_url="http://testserver") as client:
+            return await client.get("/api/app/auth", params={"role": "owner"}, headers={"X-Telegram-Init-Data": init_data})
+    assert asyncio.run(run()).status_code == 401
 
 
-@pytest.mark.asyncio
-async def test_tampered_init_data_is_rejected(client, bot_token):
-    h = headers(bot_token, "owner")
-    h["X-Telegram-Init-Data"] += "x"
-    response = await client.get("/api/app/auth", params={"role": "owner"}, headers=h)
-    assert response.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_unbound_user_cannot_claim_staff_role(client, bot_token):
-    response = await client.get(
-        "/api/app/auth", params={"role": "admin"}, headers=headers(bot_token, "unknown")
-    )
+def test_unbound_user_cannot_claim_staff_role(app_client, bot_token):
+    response = request(app_client, "GET", "/api/app/auth?role=admin", bot_token, "unknown")
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_unbound_guest_does_not_require_staff_binding(client, bot_token):
-    response = await client.get(
-        "/api/app/auth", params={"role": "guest"}, headers=headers(bot_token, "guest")
-    )
+def test_unbound_guest_does_not_require_staff_binding(app_client, bot_token):
+    response = request(app_client, "GET", "/api/app/auth?role=guest", bot_token, "guest")
     assert response.status_code == 200
     assert response.json()["role"] == "guest"
 
 
-@pytest.mark.asyncio
-async def test_owner_can_preview_admin_shape(client, bot_token):
-    response = await client.get(
-        "/api/app/auth", params={"role": "admin"}, headers=headers(bot_token, "owner")
-    )
+def test_owner_can_preview_admin_shape(app_client, bot_token):
+    response = request(app_client, "GET", "/api/app/auth?role=admin", bot_token, "owner")
     assert response.status_code == 200
     body = response.json()
     assert body["role"] == "admin"
@@ -120,8 +139,7 @@ async def test_owner_can_preview_admin_shape(client, bot_token):
     assert body["preview"] is True
 
 
-@pytest.mark.asyncio
-async def test_role_sections_follow_current_contract(client, bot_token):
+def test_role_sections_follow_current_contract(app_client, bot_token):
     endpoints = {
         "overview": "/api/app/overview",
         "work-center": "/api/app/work-center",
@@ -137,29 +155,18 @@ async def test_role_sections_follow_current_contract(client, bot_token):
     }
     for role, allowed in ROLE_SECTIONS.items():
         for section, path in endpoints.items():
-            response = await client.get(path, headers=headers(bot_token, role))
+            response = request(app_client, "GET", path, bot_token, role)
             if section in allowed:
                 assert response.status_code != 403, (role, section, response.text)
             else:
                 assert response.status_code == 403, (role, section, response.text)
 
 
-@pytest.mark.asyncio
-async def test_admin_never_sees_salary_or_penalties(client, bot_token):
+def test_admin_never_sees_salary_or_penalties(app_client, bot_token):
     for path in ("/api/app/salary", "/api/app/penalties"):
-        response = await client.get(path, headers=headers(bot_token, "admin"))
-        assert response.status_code == 403
+        assert request(app_client, "GET", path, bot_token, "admin").status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_admin_is_operational_only(client, bot_token):
-    forbidden = (
-        "/api/app/crm",
-        "/api/app/settings",
-        "/api/app/admin/profiles",
-        "/api/app/salary",
-        "/api/app/penalties",
-    )
-    for path in forbidden:
-        response = await client.get(path, headers=headers(bot_token, "admin"))
-        assert response.status_code == 403
+def test_admin_is_operational_only(app_client, bot_token):
+    for path in ("/api/app/crm", "/api/app/settings", "/api/app/admin/profiles", "/api/app/salary", "/api/app/penalties"):
+        assert request(app_client, "GET", path, bot_token, "admin").status_code == 403
