@@ -1,1 +1,0 @@
-(function(){'use strict';var s=document.createElement('style');s.textContent='body[data-sa-role="admin"] [data-drawer-page="salary"]{display:none!important}';document.head.appendChild(s);})();
