@@ -66,7 +66,13 @@ def session_guest_id(row: dict):
 
 
 def session_end(row: dict):
-    return first(row, "ended_at", "end_at", "finished_at", "closed_at", "stop_at", "end_time", "finish_time", "finish_at", "stopped_at")
+    explicit = first(row, "ended_at", "end_at", "finished_at", "closed_at", "stop_at", "end_time", "finish_time", "finish_at", "stopped_at")
+    if explicit:
+        return explicit
+    normal_stop = first(row, "normal_stop", "normalStop", default=None)
+    if normal_stop is not None and str(normal_stop).strip().lower() not in {"0", "false", "no"}:
+        return "completed"
+    return None
 
 
 def session_start(row: dict):
@@ -87,7 +93,7 @@ def session_active(row: dict) -> bool:
     normal_stop = first(row, "normal_stop", "normalStop", default=None)
     if normal_stop is not None:
         return str(normal_stop).strip().lower() in {"0", "false", "no"}
-    return not bool(session_end(row))
+    return not bool(first(row, "ended_at", "end_at", "finished_at", "closed_at", "stop_at", "end_time", "finish_time", "finish_at", "stopped_at"))
 
 
 def row_local_date(row: dict):
@@ -102,10 +108,6 @@ def row_local_date(row: dict):
         return value.astimezone(club_tz()).date().isoformat()
     except Exception:
         return text[:10] if len(text) >= 10 else None
-
-
-def current_local_date() -> str:
-    return local_day_bounds()[0].astimezone(club_tz()).date().isoformat()
 
 
 def current_day_only(rows: list[dict], day: str) -> list[dict]:
