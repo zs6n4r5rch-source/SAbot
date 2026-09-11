@@ -74,6 +74,13 @@ class LangameClient:
         if guest_id is not None: params["guest_id"] = guest_id
         return await self._get("/guests/sessions", params)
 
+    async def active_guest_sessions(self, date_from: str | None = None, date_to: str | None = None, page: int = 1, page_limit: int = 500) -> dict:
+        """Return only sessions currently active in LANGAME's dedicated active-session API."""
+        params = {"page": page, "page_limit": page_limit}
+        if date_from: params["date_from"] = date_from
+        if date_to: params["date_to"] = date_to
+        return await self._get("/guests/sessions/active", params)
+
     async def transactions(self, date_from: str | None = None, date_to: str | None = None, page: int = 1, page_limit: int = 500, type: int | None = None, pay_system: int | None = None) -> dict:
         params = {"page": page, "page_limit": page_limit}
         if date_from: params["date_from"] = date_from
